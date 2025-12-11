@@ -44,6 +44,11 @@ class FederatedLearningServiceStub(object):
                 request_serializer=protos_dot_service__pb2.EvaluateRequest.SerializeToString,
                 response_deserializer=protos_dot_service__pb2.EvaluateResponse.FromString,
                 _registered_method=True)
+        self.GetModelForDevice = channel.unary_unary(
+                '/federated_learning.FederatedLearningService/GetModelForDevice',
+                request_serializer=protos_dot_service__pb2.GetModelRequest.SerializeToString,
+                response_deserializer=protos_dot_service__pb2.GetModelResponse.FromString,
+                _registered_method=True)
 
 
 class FederatedLearningServiceServicer(object):
@@ -63,6 +68,13 @@ class FederatedLearningServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetModelForDevice(self, request, context):
+        """New: Request a specific model architecture based on device capabilities
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_FederatedLearningServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -75,6 +87,11 @@ def add_FederatedLearningServiceServicer_to_server(servicer, server):
                     servicer.Evaluate,
                     request_deserializer=protos_dot_service__pb2.EvaluateRequest.FromString,
                     response_serializer=protos_dot_service__pb2.EvaluateResponse.SerializeToString,
+            ),
+            'GetModelForDevice': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetModelForDevice,
+                    request_deserializer=protos_dot_service__pb2.GetModelRequest.FromString,
+                    response_serializer=protos_dot_service__pb2.GetModelResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -131,6 +148,33 @@ class FederatedLearningService(object):
             '/federated_learning.FederatedLearningService/Evaluate',
             protos_dot_service__pb2.EvaluateRequest.SerializeToString,
             protos_dot_service__pb2.EvaluateResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetModelForDevice(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/federated_learning.FederatedLearningService/GetModelForDevice',
+            protos_dot_service__pb2.GetModelRequest.SerializeToString,
+            protos_dot_service__pb2.GetModelResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -4,3 +4,9 @@ protobuf
 numpy
 torch
 onnxruntime
+onnx
+onnxoptimizer
+# Optional for TFLite export (uncomment if needed):
+# tensorflow
+# onnx-tf
+psutil

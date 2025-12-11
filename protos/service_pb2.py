@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x14protos/service.proto\x12\x12\x66\x65\x64\x65rated_learning\"\x8b\x01\n\nFitRequest\x12\x12\n\nparameters\x18\x01 \x01(\x0c\x12:\n\x06\x63onfig\x18\x02 \x03(\x0b\x32*.federated_learning.FitRequest.ConfigEntry\x1a-\n\x0b\x43onfigEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xa6\x01\n\x0b\x46itResponse\x12\x12\n\nparameters\x18\x01 \x01(\x0c\x12\x14\n\x0cnum_examples\x18\x02 \x01(\x05\x12=\n\x07metrics\x18\x03 \x03(\x0b\x32,.federated_learning.FitResponse.MetricsEntry\x1a.\n\x0cMetricsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x02:\x02\x38\x01\"\x95\x01\n\x0f\x45valuateRequest\x12\x12\n\nparameters\x18\x01 \x01(\x0c\x12?\n\x06\x63onfig\x18\x02 \x03(\x0b\x32/.federated_learning.EvaluateRequest.ConfigEntry\x1a-\n\x0b\x43onfigEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xaa\x01\n\x10\x45valuateResponse\x12\x0c\n\x04loss\x18\x01 \x01(\x02\x12\x14\n\x0cnum_examples\x18\x02 \x01(\x05\x12\x42\n\x07metrics\x18\x03 \x03(\x0b\x32\x31.federated_learning.EvaluateResponse.MetricsEntry\x1a.\n\x0cMetricsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x02:\x02\x38\x01\x32\xb9\x01\n\x18\x46\x65\x64\x65ratedLearningService\x12\x46\n\x03\x46it\x12\x1e.federated_learning.FitRequest\x1a\x1f.federated_learning.FitResponse\x12U\n\x08\x45valuate\x12#.federated_learning.EvaluateRequest\x1a$.federated_learning.EvaluateResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x14protos/service.proto\x12\x12\x66\x65\x64\x65rated_learning\"\x81\x01\n\nDeviceInfo\x12\x13\n\x0b\x64\x65vice_type\x18\x01 \x01(\t\x12\x17\n\x0fmemory_total_mb\x18\x02 \x01(\x02\x12\x1b\n\x13memory_available_mb\x18\x03 \x01(\x02\x12\x15\n\rcompute_score\x18\x04 \x01(\x02\x12\x11\n\tcpu_count\x18\x05 \x01(\x05\"\xc0\x01\n\nFitRequest\x12\x12\n\nparameters\x18\x01 \x01(\x0c\x12:\n\x06\x63onfig\x18\x02 \x03(\x0b\x32*.federated_learning.FitRequest.ConfigEntry\x12\x33\n\x0b\x64\x65vice_info\x18\x03 \x01(\x0b\x32\x1e.federated_learning.DeviceInfo\x1a-\n\x0b\x43onfigEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xa6\x01\n\x0b\x46itResponse\x12\x12\n\nparameters\x18\x01 \x01(\x0c\x12\x14\n\x0cnum_examples\x18\x02 \x01(\x05\x12=\n\x07metrics\x18\x03 \x03(\x0b\x32,.federated_learning.FitResponse.MetricsEntry\x1a.\n\x0cMetricsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x02:\x02\x38\x01\"\x95\x01\n\x0f\x45valuateRequest\x12\x12\n\nparameters\x18\x01 \x01(\x0c\x12?\n\x06\x63onfig\x18\x02 \x03(\x0b\x32/.federated_learning.EvaluateRequest.ConfigEntry\x1a-\n\x0b\x43onfigEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xaa\x01\n\x10\x45valuateResponse\x12\x0c\n\x04loss\x18\x01 \x01(\x02\x12\x14\n\x0cnum_examples\x18\x02 \x01(\x05\x12\x42\n\x07metrics\x18\x03 \x03(\x0b\x32\x31.federated_learning.EvaluateResponse.MetricsEntry\x1a.\n\x0cMetricsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x02:\x02\x38\x01\"F\n\x0fGetModelRequest\x12\x33\n\x0b\x64\x65vice_info\x18\x01 \x01(\x0b\x32\x1e.federated_learning.DeviceInfo\"\x97\x01\n\x10GetModelResponse\x12\x12\n\nparameters\x18\x01 \x01(\x0c\x12@\n\x06\x63onfig\x18\x02 \x03(\x0b\x32\x30.federated_learning.GetModelResponse.ConfigEntry\x1a-\n\x0b\x43onfigEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x32\x99\x02\n\x18\x46\x65\x64\x65ratedLearningService\x12\x46\n\x03\x46it\x12\x1e.federated_learning.FitRequest\x1a\x1f.federated_learning.FitResponse\x12U\n\x08\x45valuate\x12#.federated_learning.EvaluateRequest\x1a$.federated_learning.EvaluateResponse\x12^\n\x11GetModelForDevice\x12#.federated_learning.GetModelRequest\x1a$.federated_learning.GetModelResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -39,22 +39,32 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_EVALUATEREQUEST_CONFIGENTRY']._serialized_options = b'8\001'
   _globals['_EVALUATERESPONSE_METRICSENTRY']._loaded_options = None
   _globals['_EVALUATERESPONSE_METRICSENTRY']._serialized_options = b'8\001'
-  _globals['_FITREQUEST']._serialized_start=45
-  _globals['_FITREQUEST']._serialized_end=184
-  _globals['_FITREQUEST_CONFIGENTRY']._serialized_start=139
-  _globals['_FITREQUEST_CONFIGENTRY']._serialized_end=184
-  _globals['_FITRESPONSE']._serialized_start=187
-  _globals['_FITRESPONSE']._serialized_end=353
-  _globals['_FITRESPONSE_METRICSENTRY']._serialized_start=307
-  _globals['_FITRESPONSE_METRICSENTRY']._serialized_end=353
-  _globals['_EVALUATEREQUEST']._serialized_start=356
-  _globals['_EVALUATEREQUEST']._serialized_end=505
-  _globals['_EVALUATEREQUEST_CONFIGENTRY']._serialized_start=139
-  _globals['_EVALUATEREQUEST_CONFIGENTRY']._serialized_end=184
-  _globals['_EVALUATERESPONSE']._serialized_start=508
-  _globals['_EVALUATERESPONSE']._serialized_end=678
-  _globals['_EVALUATERESPONSE_METRICSENTRY']._serialized_start=307
-  _globals['_EVALUATERESPONSE_METRICSENTRY']._serialized_end=353
-  _globals['_FEDERATEDLEARNINGSERVICE']._serialized_start=681
-  _globals['_FEDERATEDLEARNINGSERVICE']._serialized_end=866
+  _globals['_GETMODELRESPONSE_CONFIGENTRY']._loaded_options = None
+  _globals['_GETMODELRESPONSE_CONFIGENTRY']._serialized_options = b'8\001'
+  _globals['_DEVICEINFO']._serialized_start=45
+  _globals['_DEVICEINFO']._serialized_end=174
+  _globals['_FITREQUEST']._serialized_start=177
+  _globals['_FITREQUEST']._serialized_end=369
+  _globals['_FITREQUEST_CONFIGENTRY']._serialized_start=324
+  _globals['_FITREQUEST_CONFIGENTRY']._serialized_end=369
+  _globals['_FITRESPONSE']._serialized_start=372
+  _globals['_FITRESPONSE']._serialized_end=538
+  _globals['_FITRESPONSE_METRICSENTRY']._serialized_start=492
+  _globals['_FITRESPONSE_METRICSENTRY']._serialized_end=538
+  _globals['_EVALUATEREQUEST']._serialized_start=541
+  _globals['_EVALUATEREQUEST']._serialized_end=690
+  _globals['_EVALUATEREQUEST_CONFIGENTRY']._serialized_start=324
+  _globals['_EVALUATEREQUEST_CONFIGENTRY']._serialized_end=369
+  _globals['_EVALUATERESPONSE']._serialized_start=693
+  _globals['_EVALUATERESPONSE']._serialized_end=863
+  _globals['_EVALUATERESPONSE_METRICSENTRY']._serialized_start=492
+  _globals['_EVALUATERESPONSE_METRICSENTRY']._serialized_end=538
+  _globals['_GETMODELREQUEST']._serialized_start=865
+  _globals['_GETMODELREQUEST']._serialized_end=935
+  _globals['_GETMODELRESPONSE']._serialized_start=938
+  _globals['_GETMODELRESPONSE']._serialized_end=1089
+  _globals['_GETMODELRESPONSE_CONFIGENTRY']._serialized_start=324
+  _globals['_GETMODELRESPONSE_CONFIGENTRY']._serialized_end=369
+  _globals['_FEDERATEDLEARNINGSERVICE']._serialized_start=1092
+  _globals['_FEDERATEDLEARNINGSERVICE']._serialized_end=1373
 # @@protoc_insertion_point(module_scope)

@@ -8,6 +8,17 @@ service FederatedLearningService {
     
     // Optional: Evaluate the model on the client
     rpc Evaluate (EvaluateRequest) returns (EvaluateResponse);
+
+    // New: Request a specific model architecture based on device capabilities
+    rpc GetModelForDevice (GetModelRequest) returns (GetModelResponse);
+}
+
+message DeviceInfo {
+    string device_type = 1;
+    float memory_total_mb = 2;
+    float memory_available_mb = 3;
+    float compute_score = 4;
+    int32 cpu_count = 5;
 }
 
 message FitRequest {
@@ -15,6 +26,8 @@ message FitRequest {
     bytes parameters = 1; 
     // Configuration dictionary (serialized JSON or bytes) for hyperparameters
     map<string, string> config = 2;
+    // Client device capabilities
+    DeviceInfo device_info = 3;
 }
 
 message FitResponse {
@@ -35,4 +48,15 @@ message EvaluateResponse {
     float loss = 1;
     int32 num_examples = 2;
     map<string, float> metrics = 3;
+}
+
+message GetModelRequest {
+    DeviceInfo device_info = 1;
+}
+
+message GetModelResponse {
+    // Initial model parameters for the chosen complexity
+    bytes parameters = 1;
+    // Model configuration (e.g. architecture name)
+    map<string, string> config = 2;
 }
