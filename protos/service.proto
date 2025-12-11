@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package federated_learning;
+
+service FederatedLearningService {
+    // Client receives model parameters from Server and returns updated parameters
+    rpc Fit (FitRequest) returns (FitResponse);
+    
+    // Optional: Evaluate the model on the client
+    rpc Evaluate (EvaluateRequest) returns (EvaluateResponse);
+}
+
+message FitRequest {
+    // Model parameters serialized as bytes
+    bytes parameters = 1; 
+    // Configuration dictionary (serialized JSON or bytes) for hyperparameters
+    map<string, string> config = 2;
+}
+
+message FitResponse {
+    // Updated model parameters serialized as bytes
+    bytes parameters = 1;
+    // Number of examples used for training
+    int32 num_examples = 2;
+    // Metrics (e.g., accuracy, loss)
+    map<string, float> metrics = 3;
+}
+
+message EvaluateRequest {
+    bytes parameters = 1;
+    map<string, string> config = 2;
+}
+
+message EvaluateResponse {
+    float loss = 1;
+    int32 num_examples = 2;
+    map<string, float> metrics = 3;
+}
