@@ -9,7 +9,7 @@
 
 安装依赖 (Install Dependencies):
 ```bash
-pip install grpcio grpcio-tools protobuf torch numpy onnxruntime
+pip install grpcio grpcio-tools protobuf torch numpy onnxruntime psutil
 ```
 
 ## 运行说明 (Running Instructions)
@@ -44,5 +44,8 @@ python client/run_onnx_baseline.py
 * `server/`: 包含服务端逻辑 (`server.py`)。
 * `client/`: 包含客户端逻辑 (`client.py`) 和训练代码。
 * `protos/`: gRPC 服务定义文件及生成的 Python 代码。
-* `utils/`: 工具函数（序列化、隐私引擎、ONNX 助手等）。
+* `utils/`: 工具函数（序列化、隐私引擎、硬件感知优化、ONNX 助手等）。
+  * `hardware.py`: 实现设备性能分析与资源调度。
+  * `privacy.py`: 差分隐私引擎。
+  * `compression.py` & `deployment.py`: 模型压缩与部署工具。
 * `Project.md`: 项目详细说明文档。
