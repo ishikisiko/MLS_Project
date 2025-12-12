@@ -14,14 +14,21 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from protos import service_pb2, service_pb2_grpc
 from utils import serialization
 from utils.models import SimpleCNN
+from utils.detection_models import YOLOv11n
 from utils import hardware
+from utils import config
+
+# Model type configuration
+# Set to 'detection' for object detection, 'classification' for image classification
+MODEL_TYPE = config.MODEL_TYPE
+NUM_CLASSES = config.NUM_CLASSES
 
 # 50MB message size limit for YOLO weights
-MAX_MESSAGE_LENGTH = 50 * 1024 * 1024
+MAX_MESSAGE_LENGTH = config.MAX_MESSAGE_LENGTH
 
 # Configuration
-MIN_FIT_CLIENTS = 2  # Minimum number of clients to wait for before aggregating
-ROUND_TIMEOUT = 30.0 # Seconds to wait for clients
+MIN_FIT_CLIENTS = config.MIN_FIT_CLIENTS
+ROUND_TIMEOUT = config.ROUND_TIMEOUT
 
 class FederatedLearningServicer(service_pb2_grpc.FederatedLearningServiceServicer):
     def __init__(self):
@@ -30,8 +37,19 @@ class FederatedLearningServicer(service_pb2_grpc.FederatedLearningServiceService
         self.condition = threading.Condition(self.lock)
         
         # Global Model Initialization
-        self.global_model = SimpleCNN()
+        if MODEL_TYPE == 'detection':
+            print("Initializing YOLOv11n detection model...")
+            self.global_model = YOLOv11n(num_classes=NUM_CLASSES)
+            self.model_type = 'detection'
+        else:
+            print("Initializing SimpleCNN classification model...")
+            self.global_model = SimpleCNN()
+            self.model_type = 'classification'
+        
         self.global_model_params = [p.data.clone() for p in self.global_model.parameters()]
+        num_params = sum(p.numel() for p in self.global_model.parameters())
+        print(f"Model parameters: {num_params:,}")
+        print(f"Model size: {num_params * 4 / 1024 / 1024:.2f} MB (FP32)")
         
         # Training State
         self.waiting_updates = [] # List of (parameters_bytes, num_examples, metrics)

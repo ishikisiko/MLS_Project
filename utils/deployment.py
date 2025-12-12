@@ -14,7 +14,7 @@ import warnings
 
 def export_to_onnx(model, dummy_input, output_path, 
                    input_names=None, output_names=None,
-                   dynamic_axes=None, opset_version=11,
+                   dynamic_axes=None, opset_version=18,
                    verbose=False):
     """
     Export a PyTorch model to ONNX format.
@@ -26,7 +26,7 @@ def export_to_onnx(model, dummy_input, output_path,
         input_names: List of input tensor names
         output_names: List of output tensor names
         dynamic_axes: Dict specifying dynamic axes for inputs/outputs
-        opset_version: ONNX opset version (default 11)
+        opset_version: ONNX opset version (default 18)
         verbose: Whether to print export details
         
     Returns:

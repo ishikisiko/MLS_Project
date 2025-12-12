@@ -10,6 +10,7 @@ Demonstrates the complete workflow of:
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 import os
@@ -139,7 +140,23 @@ def demonstrate_distillation(train_loader):
     for epoch in range(1): # Reduced to 1 epoch for demo speed
         total_loss = 0
         batch_count = 0
-        for inputs, labels in train_loader:
+        
+        # Handle the detection dataloader format (images, targets, paths, shapes)
+        # even though we are demonstrating classification distillation
+        for batch_data in train_loader:
+            if len(batch_data) == 2:
+                inputs, labels = batch_data
+            elif len(batch_data) == 4:
+                inputs, targets, _, _ = batch_data
+                # Create dummy classification labels for the demo
+                # since we're using a detection dataset for a classification demo
+                labels = torch.randint(0, 10, (inputs.size(0),))
+            else:
+                continue
+
+            # Resize inputs to 32x32 for SimpleCNN
+            inputs = F.interpolate(inputs, size=(32, 32), mode='bilinear', align_corners=False)
+
             loss = distiller.train_step(inputs, labels, optimizer)
             total_loss += loss
             batch_count += 1
@@ -169,7 +186,11 @@ def demonstrate_export(model, output_dir="exported_models", filename="model.onnx
     # Export to ONNX
     onnx_path = os.path.join(output_dir, filename)
     print(f"\nExporting to ONNX ({filename})...")
-    exporter.export_onnx(onnx_path, optimize=False)
+    try:
+        exporter.export_onnx(onnx_path, optimize=False)
+    except Exception as e:
+        print(f"  ONNX export failed: {e}")
+        return None
     
     # Check file size
     onnx_size = get_file_size(onnx_path)

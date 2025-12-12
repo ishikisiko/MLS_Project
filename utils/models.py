@@ -2,6 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# Import detection models
+from utils.detection_models import YOLOv11n, create_yolo_nano, DetectionHead
+from utils.detection_loss import DetectionLoss
+from utils.detection_metrics import DetectionEvaluator
+
 class SimpleCNN(nn.Module):
     """
     A simple Convolutional Neural Network for testing FedProx and DP integration.
