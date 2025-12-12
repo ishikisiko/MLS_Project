@@ -158,10 +158,10 @@ def demonstrate_distillation():
     return student
 
 
-def demonstrate_export(model, output_dir="exported_models"):
+def demonstrate_export(model, output_dir="exported_models", filename="model.onnx"):
     """Demonstrate model export capabilities."""
     print("\n" + "="*60)
-    print("4. MODEL EXPORT DEMONSTRATION")
+    print(f"4. MODEL EXPORT DEMONSTRATION: {filename}")
     print("="*60)
     
     os.makedirs(output_dir, exist_ok=True)
@@ -171,8 +171,8 @@ def demonstrate_export(model, output_dir="exported_models"):
     exporter = ModelExporter(model, dummy_input)
     
     # Export to ONNX
-    onnx_path = os.path.join(output_dir, "model.onnx")
-    print(f"\nExporting to ONNX...")
+    onnx_path = os.path.join(output_dir, filename)
+    print(f"\nExporting to ONNX ({filename})...")
     exporter.export_onnx(onnx_path, optimize=False)
     
     # Check file size
@@ -196,7 +196,8 @@ def demonstrate_export(model, output_dir="exported_models"):
     
     # Try TFLite export (may fail if dependencies not installed)
     print("\nAttempting TFLite export...")
-    tflite_path = os.path.join(output_dir, "model.tflite")
+    tflite_filename = os.path.splitext(filename)[0] + ".tflite"
+    tflite_path = os.path.join(output_dir, tflite_filename)
     try:
         from utils.deployment import export_to_tflite
         result = export_to_tflite(onnx_path, tflite_path)
@@ -235,8 +236,14 @@ def run_full_pipeline():
     # 3. Distillation
     distilled_model = demonstrate_distillation()
     
-    # 4. Export (using pruned model as example)
-    onnx_path = demonstrate_export(SimpleCNN(), "exported_models")
+    # 4. Export all models
+    print("\n" + "="*60)
+    print("EXPORTING ALL MODELS")
+    print("="*60)
+    
+    demonstrate_export(pruned_model, "exported_models", "pruned_model.onnx")
+    demonstrate_export(quantized_model, "exported_models", "quantized_model.onnx")
+    demonstrate_export(distilled_model, "exported_models", "distilled_model.onnx")
     
     # Summary
     print("\n" + "="*60)
