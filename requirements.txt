@@ -1,12 +1,23 @@
+# Core dependencies
 grpcio
 grpcio-tools
 protobuf
 numpy
 torch
+torchvision
+psutil
+
+# Model deployment and optimization
 onnxruntime
 onnx
 onnxoptimizer
+
 # Optional for TFLite export (uncomment if needed):
 # tensorflow
 # onnx-tf
-psutil
+
+# Development and testing (optional)
+# matplotlib
+# seaborn
+# tqdm
+# tensorboard

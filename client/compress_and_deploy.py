@@ -27,16 +27,7 @@ from utils.deployment import (
     ModelExporter, export_to_onnx, optimize_onnx, 
     verify_onnx, get_model_info, get_file_size
 )
-
-
-def create_dummy_data(batch_size=32, num_batches=10):
-    """Create dummy training data for demonstration."""
-    data = []
-    for _ in range(num_batches):
-        inputs = torch.randn(batch_size, 3, 32, 32)
-        labels = torch.randint(0, 10, (batch_size,))
-        data.append((inputs, labels))
-    return data
+from utils.data_loader import get_data_loaders
 
 
 def demonstrate_pruning(model):
@@ -94,7 +85,7 @@ def demonstrate_quantization(model):
     return quantized_model
 
 
-def demonstrate_distillation():
+def demonstrate_distillation(train_loader):
     """Demonstrate knowledge distillation capabilities."""
     print("\n" + "="*60)
     print("3. KNOWLEDGE DISTILLATION DEMONSTRATION")
@@ -138,20 +129,25 @@ def demonstrate_distillation():
         alpha=0.7
     )
     
-    # Create dummy data
-    dummy_data = create_dummy_data(batch_size=16, num_batches=5)
-    
     # Train for a few steps
     optimizer = optim.Adam(student.parameters(), lr=0.001)
     
-    print("\nTraining student with knowledge distillation...")
-    for epoch in range(2):
+    print("\nTraining student with knowledge distillation using real dataset (UA-DETRAC)...")
+    # Using a subset of batches for demonstration purposes
+    max_batches = 10 
+    
+    for epoch in range(1): # Reduced to 1 epoch for demo speed
         total_loss = 0
-        for inputs, labels in dummy_data:
+        batch_count = 0
+        for inputs, labels in train_loader:
             loss = distiller.train_step(inputs, labels, optimizer)
             total_loss += loss
-        avg_loss = total_loss / len(dummy_data)
-        print(f"  Epoch {epoch+1}: Loss = {avg_loss:.4f}")
+            batch_count += 1
+            if batch_count >= max_batches:
+                break
+                
+        avg_loss = total_loss / batch_count
+        print(f"  Epoch {epoch+1}: Loss = {avg_loss:.4f} (over {batch_count} batches)")
     
     print("  Distillation training complete!")
     
@@ -219,6 +215,11 @@ def run_full_pipeline():
     print("MODEL COMPRESSION & DEPLOYMENT PIPELINE")
     print("="*60)
     
+    # Load Real Data
+    print("\nLoading UA-DETRAC dataset (resized to 32x32)...")
+    train_loader, test_loader = get_data_loaders(batch_size=32)
+    print("Data loaded successfully.")
+
     # Create model
     print("\nCreating SimpleCNN model...")
     model = SimpleCNN()
@@ -234,7 +235,7 @@ def run_full_pipeline():
     quantized_model = demonstrate_quantization(fresh_model)
     
     # 3. Distillation
-    distilled_model = demonstrate_distillation()
+    distilled_model = demonstrate_distillation(train_loader)
     
     # 4. Export all models
     print("\n" + "="*60)
@@ -252,7 +253,7 @@ def run_full_pipeline():
     print("\nCompression techniques demonstrated:")
     print("  ✓ Unstructured Pruning (L1-norm based)")
     print("  ✓ Dynamic Quantization (INT8)")
-    print("  ✓ Knowledge Distillation")
+    print("  ✓ Knowledge Distillation (UA-DETRAC)")
     print("\nExport formats:")
     print("  ✓ ONNX (with optimization)")
     print("  - TFLite (requires tensorflow, onnx-tf)")
