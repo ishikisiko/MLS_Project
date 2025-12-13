@@ -40,7 +40,7 @@ def download_dataset(api_key, data_path):
 
 def main():
     parser = argparse.ArgumentParser(description="Train First Stage Baseline (YOLOv11n) on UA-DETRAC-10K-SAMPLE")
-    parser.add_argument("--api-key", type=str, default="TwdK954qNo", help="Roboflow API Key")
+    parser.add_argument("--api-key", type=str, default="z6wNBWkCaVkCLEkgN8Y4", help="Roboflow API Key")
     parser.add_argument("--epochs", type=int, default=10, help="Number of epochs")
     parser.add_argument("--batch-size", type=int, default=16, help="Batch size")
     parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
@@ -50,12 +50,23 @@ def main():
     args = parser.parse_args()
 
     # 1. Download Dataset
-    if not os.path.exists(args.data_dir):
+    train_images_dir = os.path.join(args.data_dir, 'train', 'images')
+    # Check if data exists and is not empty
+    data_exists = os.path.exists(args.data_dir) and \
+                  os.path.exists(train_images_dir) and \
+                  len(os.listdir(train_images_dir)) > 0
+
+    if not data_exists:
+        if os.path.exists(args.data_dir):
+            print(f"Dataset directory {args.data_dir} exists but appears empty or incomplete. Removing to re-download...")
+            import shutil
+            shutil.rmtree(args.data_dir)
+        
         os.makedirs(args.data_dir, exist_ok=True)
         print(f"Downloading dataset using Roboflow API...")
         dataset_path = download_dataset(args.api_key, args.data_dir)
     else:
-        print(f"Dataset directory {args.data_dir} already exists. Using existing data.")
+        print(f"Dataset directory {args.data_dir} already exists and contains data. Using existing data.")
         dataset_path = args.data_dir
 
     # 2. Setup DataLoaders
