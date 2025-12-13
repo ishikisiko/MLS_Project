@@ -337,26 +337,21 @@ class DetectionEvaluator:
         
         return batch_preds
     
-    def process_targets(self, targets):
+    def process_targets(self, targets, batch_size):
         """
         Process targets from dataloader format to evaluation format.
         
         Args:
             targets: Tensor (M, 6) format [batch_idx, cls, x, y, w, h]
+            batch_size: Batch size (needed to handle images with no objects)
         
         Returns:
             List of target dicts per image in batch
         """
-        if targets.numel() == 0:
-            return [{'boxes': np.array([]).reshape(0, 4), 'labels': np.array([])}]
-        
-        # Group by batch index
-        batch_indices = targets[:, 0].unique()
         batch_targets = []
         
-        max_batch = int(batch_indices.max()) + 1 if len(batch_indices) > 0 else 0
-        
-        for b in range(max_batch):
+        for b in range(batch_size):
+            # Find targets for this batch index
             mask = targets[:, 0] == b
             if mask.any():
                 t = targets[mask]
@@ -381,8 +376,9 @@ class DetectionEvaluator:
             outputs: Model output (B, N, 4+1+C)
             targets: Ground truth (M, 6)
         """
+        batch_size = outputs.size(0)
         preds = self.decode_predictions(outputs)
-        tgts = self.process_targets(targets)
+        tgts = self.process_targets(targets, batch_size)
         
         self.predictions.extend(preds)
         self.targets.extend(tgts)
