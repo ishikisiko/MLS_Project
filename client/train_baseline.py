@@ -133,9 +133,9 @@ def main():
         batch_size=args.batch_size, 
         shuffle=False, 
         collate_fn=UADetracDataset.collate_fn,
-        num_workers=num_workers,
+        num_workers=0, # Use 0 workers for validation to avoid hanging on Windows
         pin_memory=True,
-        persistent_workers=(num_workers > 0)
+        persistent_workers=False
     )
 
     print(f"Train samples: {len(train_dataset)}, Val samples: {len(val_dataset)}")

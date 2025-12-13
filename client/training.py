@@ -168,7 +168,9 @@ def evaluate_detection(model, val_loader, device, num_classes=4, conf_threshold=
     evaluator = DetectionEvaluator(num_classes=num_classes, conf_threshold=conf_threshold)
     
     with torch.no_grad():
-        for batch_data in val_loader:
+        for i, batch_data in enumerate(val_loader):
+            if i % 10 == 0:
+                print(f"Eval batch {i}...", end='\r')
             if len(batch_data) == 4:
                 images, targets, paths, shapes = batch_data
             elif len(batch_data) == 2:
