@@ -20,8 +20,9 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.models import SimpleCNN
+from utils.detection_models import YOLOv11n
 from utils.compression import (
-    ModelPruner, ModelQuantizer, DistillationTrainer,
+    ModelPruner, ModelQuantizer, DistillationTrainer, DetectionDistillationTrainer,
     get_model_size, compare_models
 )
 from utils.deployment import (
@@ -29,6 +30,7 @@ from utils.deployment import (
     verify_onnx, get_model_info, get_file_size
 )
 from utils.data_loader import get_data_loaders
+from utils import config
 
 
 def demonstrate_pruning(model):
@@ -93,27 +95,13 @@ def demonstrate_distillation(train_loader):
     print("="*60)
     
     # Create teacher (larger) and student (smaller) models
-    teacher = SimpleCNN()
+    # Teacher: 1.0x width (Standard YOLOv11n Baseline)
+    print("Initializing Teacher Model (YOLOv11n width=1.0 - Baseline)...")
+    teacher = YOLOv11n(width_mult=1.0)
     
-    # Create a smaller student model
-    class SmallCNN(nn.Module):
-        def __init__(self):
-            super(SmallCNN, self).__init__()
-            self.conv1 = nn.Conv2d(3, 4, 5)
-            self.pool = nn.MaxPool2d(2, 2)
-            self.conv2 = nn.Conv2d(4, 8, 5)
-            self.fc1 = nn.Linear(8 * 5 * 5, 60)
-            self.fc2 = nn.Linear(60, 10)
-        
-        def forward(self, x):
-            x = self.pool(torch.relu(self.conv1(x)))
-            x = self.pool(torch.relu(self.conv2(x)))
-            x = x.view(-1, 8 * 5 * 5)
-            x = torch.relu(self.fc1(x))
-            x = self.fc2(x)
-            return x
-    
-    student = SmallCNN()
+    # Student: 0.5x width (Compressed)
+    print("Initializing Student Model (YOLOv11n width=0.5 - Compressed)...")
+    student = YOLOv11n(width_mult=0.5)
     
     teacher_info = get_model_size(teacher)
     student_info = get_model_size(student)
@@ -123,11 +111,10 @@ def demonstrate_distillation(train_loader):
     print(f"Compression ratio: {teacher_info['num_parameters']/student_info['num_parameters']:.2f}x")
     
     # Setup distillation training
-    distiller = DistillationTrainer(
+    distiller = DetectionDistillationTrainer(
         teacher_model=teacher,
         student_model=student,
-        temperature=4.0,
-        alpha=0.7
+        alpha=0.5
     )
     
     # Train for a few steps
@@ -142,36 +129,32 @@ def demonstrate_distillation(train_loader):
         batch_count = 0
         
         # Handle the detection dataloader format (images, targets, paths, shapes)
-        # even though we are demonstrating classification distillation
         for batch_data in train_loader:
-            if len(batch_data) == 2:
-                inputs, labels = batch_data
-            elif len(batch_data) == 4:
+            if len(batch_data) == 4:
                 inputs, targets, _, _ = batch_data
-                # Create dummy classification labels for the demo
-                # since we're using a detection dataset for a classification demo
-                labels = torch.randint(0, 10, (inputs.size(0),))
             else:
                 continue
 
-            # Resize inputs to 32x32 for SimpleCNN
-            inputs = F.interpolate(inputs, size=(32, 32), mode='bilinear', align_corners=False)
-
-            loss = distiller.train_step(inputs, labels, optimizer)
+            # DetectionDistillationTrainer handles device movement internally or we can do it here
+            # Ideally trainer handles it.
+            
+            # Loss computation
+            loss = distiller.train_step(inputs, targets, optimizer)
             total_loss += loss
             batch_count += 1
             if batch_count >= max_batches:
                 break
                 
-        avg_loss = total_loss / batch_count
-        print(f"  Epoch {epoch+1}: Loss = {avg_loss:.4f} (over {batch_count} batches)")
+        if batch_count > 0:
+            avg_loss = total_loss / batch_count
+            print(f"  Epoch {epoch+1}: Loss = {avg_loss:.4f} (over {batch_count} batches)")
     
     print("  Distillation training complete!")
     
     return student
 
 
-def demonstrate_export(model, output_dir="exported_models", filename="model.onnx"):
+def demonstrate_export(model, output_dir="exported_models", filename="model.onnx", input_shape=(1, 3, 32, 32)):
     """Demonstrate model export capabilities."""
     print("\n" + "="*60)
     print(f"4. MODEL EXPORT DEMONSTRATION: {filename}")
@@ -180,7 +163,7 @@ def demonstrate_export(model, output_dir="exported_models", filename="model.onnx
     os.makedirs(output_dir, exist_ok=True)
     
     # Prepare export
-    dummy_input = torch.randn(1, 3, 32, 32)
+    dummy_input = torch.randn(*input_shape)
     exporter = ModelExporter(model, dummy_input)
     
     # Export to ONNX
@@ -237,7 +220,7 @@ def run_full_pipeline():
     print("="*60)
     
     # Load Real Data
-    print("\nLoading UA-DETRAC dataset (resized to 32x32)...")
+    print(f"\nLoading UA-DETRAC dataset (resized to {config.INPUT_SIZE}x{config.INPUT_SIZE})...")
     train_loader, test_loader = get_data_loaders(batch_size=32)
     print("Data loaded successfully.")
 
@@ -265,7 +248,7 @@ def run_full_pipeline():
     
     demonstrate_export(pruned_model, "exported_models", "pruned_model.onnx")
     demonstrate_export(quantized_model, "exported_models", "quantized_model.onnx")
-    demonstrate_export(distilled_model, "exported_models", "distilled_model.onnx")
+    demonstrate_export(distilled_model, "exported_models", "distilled_model.onnx", input_shape=(1, 3, config.INPUT_SIZE, config.INPUT_SIZE))
     
     # Summary
     print("\n" + "="*60)

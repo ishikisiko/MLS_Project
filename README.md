@@ -40,6 +40,65 @@ python client/client.py
 python client/run_onnx_baseline.py
 ```
 
+## 模型训练与压缩 (Model Training & Compression)
+
+### 4. 训练 Baseline 模型 (Train Baseline Model)
+如果只需要训练基础的 YOLOv11n 模型作为性能基准：
+
+```bash
+python client/train_baseline.py
+```
+
+**可选参数**:
+- `--epochs`: 训练轮数 (默认: 50)
+- `--batch-size`: 批次大小 (默认: 16)  
+- `--lr`: 学习率 (默认: 0.001)
+- `--data-dir`: 数据集路径 (默认: `./data/ua-detrac-10k`)
+- `--api-key`: Roboflow API密钥 (默认已提供)
+
+**示例**:
+```bash
+python client/train_baseline.py --epochs 100 --batch-size 32 --lr 0.0005
+```
+
+训练完成后，模型将保存到 `client/baseline_model.pth`。
+
+### 5. 获取模型压缩变体 (Get Model Compression Variants)
+运行完整的压缩和部署流水线，获得三种压缩变体：
+
+```bash
+python client/compress_and_deploy.py
+```
+
+**该脚本将演示以下压缩技术**:
+
+1. **结构化剪枝 (Structured Pruning)**
+   - 移除50%的模型权重
+   - 生成 `pruned_model.onnx`
+
+2. **动态量化 (Dynamic Quantization)**
+   - INT8量化减少模型大小
+   - 生成 `quantized_model.onnx`
+
+3. **知识蒸馏 (Knowledge Distillation)**
+   - Teacher模型: 标准YOLOv11n (width_mult=1.0)
+   - Student模型: 压缩版YOLOv11n (width_mult=0.5)
+   - 生成 `distilled_model.onnx`
+
+**输出文件**:
+所有压缩模型将保存到 `exported_models/` 目录：
+- `pruned_model.onnx` - 剪枝版本
+- `quantized_model.onnx` - 量化版本  
+- `distilled_model.onnx` - 蒸馏版本
+
+**性能对比**:
+脚本会自动显示各模型的参数量和压缩比：
+```
+Teacher model: 2,800,000 parameters
+Student model: 700,000 parameters
+Compression ratio: 4.00x
+```
+
 ## 项目结构 (Project Structure)
 * `server/`: 包含服务端逻辑 (`server.py`)。
 * `client/`: 包含客户端逻辑 (`client.py`) 和训练代码。

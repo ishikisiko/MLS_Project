@@ -108,15 +108,16 @@ class DetectionHead(nn.Module):
     
     def _initialize_biases(self):
         """Initialize detection biases for faster convergence."""
-        for head in self.heads:
-            # Get the final conv layer
-            final_conv = head[-1]
-            b = final_conv.bias.view(-1)
-            # Objectness bias (assume 1/1000 objects per cell)
-            b[4] = math.log(1 / (config.INPUT_SIZE / 8) ** 2)  # obj
-            # Class bias
-            b[5:] = math.log(0.25 / (self.num_classes - 0.25))
-            final_conv.bias = nn.Parameter(b.view(-1), requires_grad=True)
+        with torch.no_grad():
+            for head in self.heads:
+                # Get the final conv layer
+                final_conv = head[-1]
+                b = final_conv.bias.view(-1)
+                # Objectness bias (assume 1/1000 objects per cell)
+                b[4] = math.log(1 / (config.INPUT_SIZE / 8) ** 2)  # obj
+                # Class bias
+                b[5:] = math.log(0.25 / (self.num_classes - 0.25))
+                final_conv.bias.copy_(b.view(-1))
     
     def forward(self, features):
         """
@@ -149,67 +150,71 @@ class YOLOv11n(nn.Module):
     - Head: Anchor-free detection head
     """
     
-    def __init__(self, num_classes=config.NUM_CLASSES, input_size=config.INPUT_SIZE):
+    def __init__(self, num_classes=config.NUM_CLASSES, input_size=config.INPUT_SIZE, width_mult=1.0):
         super().__init__()
         self.num_classes = num_classes
         self.input_size = input_size
         
-        # Backbone channels: [32, 64, 128, 256]
-        # Nano version uses smaller channel widths
+        # Channel scaler
+        def c(x): return int(x * width_mult)
+        
+        # Backbone channels: [32, 64, 128, 256] * width_mult
         
         # ===== Backbone =====
         # Stem
-        self.stem = ConvBlock(3, 16, 3, 2)  # 640 -> 320
+        self.stem = ConvBlock(3, c(16), 3, 2)  # 640 -> 320
         
         # Stage 1
         self.stage1 = nn.Sequential(
-            ConvBlock(16, 32, 3, 2),  # 320 -> 160
-            C2f(32, 32, n=1)
+            ConvBlock(c(16), c(32), 3, 2),  # 320 -> 160
+            C2f(c(32), c(32), n=1)
         )
         
-        # Stage 2
+        # Stage 2 (P3 - 80x80)
         self.stage2 = nn.Sequential(
-            ConvBlock(32, 64, 3, 2),  # 160 -> 80
-            C2f(64, 64, n=2)
+            ConvBlock(c(32), c(64), 3, 2),  # 160 -> 80
+            C2f(c(64), c(64), n=2)
         )
         
-        # Stage 3 (P3/8 - 80x80 for small objects)
+        # Stage 3 (P4 - 40x40)
         self.stage3 = nn.Sequential(
-            ConvBlock(64, 128, 3, 2),  # 80 -> 40
-            C2f(128, 128, n=2)
+            ConvBlock(c(64), c(128), 3, 2),  # 80 -> 40
+            C2f(c(128), c(128), n=2)
         )
         
-        # Stage 4 (P4/16 - 40x40 for medium objects)
+        # Stage 4 (P5 - 20x20)
         self.stage4 = nn.Sequential(
-            ConvBlock(128, 256, 3, 2),  # 40 -> 20
-            C2f(256, 256, n=1),
-            SPPF(256, 256)
+            ConvBlock(c(128), c(256), 3, 2),  # 40 -> 20
+            C2f(c(256), c(256), n=1),
+            SPPF(c(256), c(256))
         )
         
         # ===== Neck (FPN) =====
         self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
         
-        # P4 lateral
-        self.lateral_p4 = ConvBlock(256, 128, 1)
-        self.fpn_p4 = C2f(256, 128, n=1, shortcut=False)  # 128 + 128 = 256 in
+        # P5 -> P4
+        self.lateral_p5 = ConvBlock(c(256), c(128), 1)
+        self.fpn_p4 = C2f(c(256), c(128), n=1, shortcut=False)  # 128(up) + 128(backbone) = 256 in
         
-        # P3 lateral  
-        self.lateral_p3 = ConvBlock(128, 64, 1)
-        self.fpn_p3 = C2f(128, 64, n=1, shortcut=False)  # 64 + 64 = 128 in
+        # P4 -> P3  
+        self.lateral_p4 = ConvBlock(c(128), c(64), 1)
+        self.fpn_p3 = C2f(c(128), c(64), n=1, shortcut=False)  # 64(up) + 64(backbone) = 128 in
         
-        # Bottom-up path
-        self.downsample_p3 = ConvBlock(64, 64, 3, 2)
-        self.pan_p4 = C2f(192, 128, n=1, shortcut=False)  # 64 + 128 = 192 in
+        # Bottom-up path (PAN)
+        # P3 -> P4
+        self.downsample_p3 = ConvBlock(c(64), c(64), 3, 2)
+        self.pan_p4 = C2f(c(192), c(128), n=1, shortcut=False)  # 64(down) + 128(lateral) = 192 in
         
-        self.downsample_p4 = ConvBlock(128, 128, 3, 2)
-        self.pan_p5 = C2f(384, 256, n=1, shortcut=False)  # 128 + 256 = 384 in
+        # P4 -> P5
+        self.downsample_p4 = ConvBlock(c(128), c(128), 3, 2)
+        self.pan_p5 = C2f(c(384), c(256), n=1, shortcut=False)  # 128(down) + 256(lateral) = 384 in
         
         # ===== Detection Head =====
-        self.head = DetectionHead([64, 128, 256], num_classes=num_classes)
+        self.head = DetectionHead([c(64), c(128), c(256)], num_classes=num_classes)
         
         # Initialize weights
         self._initialize_weights()
-    
+
     def _initialize_weights(self):
         """Initialize model weights."""
         for m in self.modules():
@@ -233,30 +238,32 @@ class YOLOv11n(nn.Module):
         # Backbone
         x = self.stem(x)        # 320
         x = self.stage1(x)      # 160
-        x = self.stage2(x)      # 80
-        p3 = self.stage3(x)     # 40, 128 channels
-        p4_backbone = self.stage4(p3)   # 20, 256 channels
+        p3_backbone = self.stage2(x)      # 80x80 (P3)
+        p4_backbone = self.stage3(p3_backbone)     # 40x40 (P4)
+        p5_backbone = self.stage4(p4_backbone)   # 20x20 (P5)
         
         # FPN (top-down)
-        p4_lat = self.lateral_p4(p4_backbone)  # 128 channels
-        p4_up = self.upsample(p4_lat)          # 40x40
-        p4 = self.fpn_p4(torch.cat([p4_up, p3], 1))  # Concat with P3 from backbone
+        # P5 -> P4
+        p5_lat = self.lateral_p5(p5_backbone)  # 128 channels
+        p5_up = self.upsample(p5_lat)          # 40x40
+        p4_fused = self.fpn_p4(torch.cat([p5_up, p4_backbone], 1))  # 40x40
         
-        p3_lat = self.lateral_p3(p4)           # 64 channels
-        p3_up = self.upsample(p3_lat)          # 80x80
-        # Need intermediate feature from stage2
-        # For simplicity, we use p3 as the P3 feature
-        n3 = self.fpn_p3(torch.cat([p3_up, p3_lat], 1))  # 64 channels, 80x80
+        # P4 -> P3
+        p4_lat = self.lateral_p4(p4_fused)     # 64 channels
+        p4_up = self.upsample(p4_lat)          # 80x80
+        p3_fused = self.fpn_p3(torch.cat([p4_up, p3_backbone], 1))  # 80x80
         
         # PAN (bottom-up)
-        n3_down = self.downsample_p3(n3)       # 40x40
-        n4 = self.pan_p4(torch.cat([n3_down, p4], 1))  # 128 channels
+        # P3 -> P4
+        p3_down = self.downsample_p3(p3_fused)       # 40x40
+        n4 = self.pan_p4(torch.cat([p3_down, p4_fused], 1))  # 40x40
         
+        # P4 -> P5
         n4_down = self.downsample_p4(n4)       # 20x20
-        n5 = self.pan_p5(torch.cat([n4_down, p4_backbone], 1))  # 256 channels
+        n5 = self.pan_p5(torch.cat([n4_down, p5_backbone], 1))  # 20x20
         
         # Detection
-        features = [n3, n4, n5]  # 80x80, 40x40, 20x20
+        features = [p3_fused, n4, n5]  # 80x80, 40x40, 20x20
         return self.head(features)
     
     def get_num_params(self):

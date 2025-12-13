@@ -100,9 +100,20 @@ class UADetracDataset(Dataset):
         Adds a batch index to the targets.
         """
         img, label, path, shapes = zip(*batch)  # transposed
+        new_labels = []
         for i, l in enumerate(label):
-            l[:, 0] = i  # add target image index for build_targets()
-        return torch.stack(img, 0), torch.cat(label, 0), path, shapes
+            if l.shape[0] > 0:
+                # Add batch index column: [batch_idx, cls, x, y, w, h]
+                batch_idx = torch.full((l.shape[0], 1), i, dtype=l.dtype)
+                new_l = torch.cat((batch_idx, l), dim=1)
+                new_labels.append(new_l)
+        
+        if new_labels:
+            labels_tensor = torch.cat(new_labels, 0)
+        else:
+            labels_tensor = torch.zeros((0, 6), dtype=torch.float32)
+            
+        return torch.stack(img, 0), labels_tensor, path, shapes
 
 
 class MockDetectionDataset(Dataset):
@@ -177,9 +188,20 @@ class MockDetectionDataset(Dataset):
         Same as UADetracDataset.collate_fn for compatibility.
         """
         img, label, path, shapes = zip(*batch)
+        new_labels = []
         for i, l in enumerate(label):
-            l[:, 0] = i  # add target image index for build_targets()
-        return torch.stack(img, 0), torch.cat(label, 0), path, shapes
+            if l.shape[0] > 0:
+                # Add batch index column: [batch_idx, cls, x, y, w, h]
+                batch_idx = torch.full((l.shape[0], 1), i, dtype=l.dtype)
+                new_l = torch.cat((batch_idx, l), dim=1)
+                new_labels.append(new_l)
+        
+        if new_labels:
+            labels_tensor = torch.cat(new_labels, 0)
+        else:
+            labels_tensor = torch.zeros((0, 6), dtype=torch.float32)
+            
+        return torch.stack(img, 0), labels_tensor, path, shapes
 
 
 def get_mock_loaders(batch_size=32, num_workers=0):
@@ -243,6 +265,9 @@ def get_ua_detrac_loaders(data_root=None, batch_size=32, num_workers=0, use_mock
     if use_mock is None:
         use_mock = config.USE_MOCK_DATA
     
+    # Explicitly log the data source decision
+    print(f"Data Loader Config: use_mock={use_mock} (config.USE_MOCK_DATA={config.USE_MOCK_DATA})")
+    
     if use_mock:
         print("Using mock (simulated) dataset for testing...")
         return get_mock_loaders(batch_size=batch_size, num_workers=num_workers)
@@ -251,6 +276,15 @@ def get_ua_detrac_loaders(data_root=None, batch_size=32, num_workers=0, use_mock
     if data_root is None:
         data_root = config.DEFAULT_DATA_ROOT
     
+    # Verify data root exists to avoid confusion
+    if not os.path.exists(data_root):
+        print(f"ERROR: Dataset root directory not found: {data_root}")
+        print(f"       Current working directory: {os.getcwd()}")
+        print(f"       Please check config.DEFAULT_DATA_ROOT or provide correct data_root.")
+        # Fallback logic could go here, but for now we should alert the user
+        # Raising an error is better than silently failing or switching to mock
+        raise FileNotFoundError(f"Dataset root not found: {data_root}")
+
     print(f"Using real UA-DETRAC dataset from: {data_root}")
     
     # Standard YOLO-style resizing (e.g., to 640x640)
