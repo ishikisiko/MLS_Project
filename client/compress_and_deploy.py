@@ -125,7 +125,7 @@ def demonstrate_quantization(model, calibration_loader, val_loader=None):
     return quantized_model
 
 
-def demonstrate_distillation(train_loader, val_loader=None):
+def demonstrate_distillation(train_loader, val_loader=None, teacher_model=None):
     """Demonstrate knowledge distillation capabilities."""
     print("\n" + "="*60)
     print("3. KNOWLEDGE DISTILLATION DEMONSTRATION")
@@ -133,8 +133,12 @@ def demonstrate_distillation(train_loader, val_loader=None):
     
     # Create teacher (larger) and student (smaller) models
     # Teacher: 1.0x width (Standard YOLOv11n Baseline)
-    print("Initializing Teacher Model (YOLOv11n width=1.0 - Baseline)...")
-    teacher = YOLOv11n(width_mult=1.0)
+    if teacher_model is not None:
+        print("Using provided Teacher Model (Trained Baseline)...")
+        teacher = teacher_model
+    else:
+        print("Initializing Teacher Model (YOLOv11n width=1.0 - Baseline)...")
+        teacher = YOLOv11n(width_mult=1.0)
     
     # Student: 0.5x width (Compressed)
     print("Initializing Student Model (YOLOv11n width=0.5 - Compressed)...")
@@ -260,7 +264,7 @@ def demonstrate_export(model, output_dir="exported_models", filename="model.onnx
     return onnx_path
 
 
-def demonstrate_cross_platform_distillation(train_loader):
+def demonstrate_cross_platform_distillation(train_loader, teacher_model=None):
     """Demonstrate distillation adapted for different target devices."""
     print("\n" + "="*60)
     print("5. CROSS-PLATFORM KNOWLEDGE TRANSFER")
@@ -278,8 +282,12 @@ def demonstrate_cross_platform_distillation(train_loader):
     registry = ModelRegistry()
     
     # Teacher is constant
-    print("Initializing Teacher Model (YOLOv11n width=1.0)...")
-    teacher = YOLOv11n(width_mult=1.0)
+    if teacher_model is not None:
+        print("Using provided Teacher Model (Trained Baseline)...")
+        teacher = teacher_model
+    else:
+        print("Initializing Teacher Model (YOLOv11n width=1.0)...")
+        teacher = YOLOv11n(width_mult=1.0)
     
     for profile in profiles:
         print(f"\n{'-'*40}")
@@ -321,28 +329,62 @@ def run_full_pipeline():
     
     # Load Real Data
     print(f"\nLoading UA-DETRAC dataset (resized to {config.INPUT_SIZE}x{config.INPUT_SIZE})...")
+    
+    # Check if data exists
+    if not os.path.exists(config.DEFAULT_DATA_ROOT) or not os.path.exists(os.path.join(config.DEFAULT_DATA_ROOT, 'train')):
+        print(f"Dataset not found at {config.DEFAULT_DATA_ROOT}. Switching to MOCK data for demonstration.")
+        config.USE_MOCK_DATA = True
+
     train_loader, test_loader = get_data_loaders(batch_size=32)
     print("Data loaded successfully.")
 
     # Create model
     print("\nCreating YOLOv11n model...")
     model = YOLOv11n()
+    
+    # Load baseline model if it exists
+    baseline_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "baseline_model.pth")
+    if os.path.exists(baseline_path):
+        print(f"Loading trained baseline model from {baseline_path}...")
+        try:
+            state_dict = torch.load(baseline_path, map_location='cpu')
+            model.load_state_dict(state_dict)
+            print("Model loaded successfully.")
+        except Exception as e:
+            print(f"Error loading model: {e}")
+            print("Using random initialization instead.")
+    else:
+        print(f"Warning: {baseline_path} not found. Using random initialization.")
+
     model_info = get_model_info(model)
     print(f"Model created: {model_info['num_parameters']:,} parameters, "
           f"{model_info['size_mb']:.4f} MB")
     
-    # 1. Pruning
-    pruned_model = demonstrate_pruning(model, val_loader=test_loader)
+    # Keep a copy of the state dict to reset for each demonstration
+    original_state_dict = model.state_dict()
     
-    # 2. Quantization (using fresh model)
-    fresh_model = YOLOv11n()
-    quantized_model = demonstrate_quantization(fresh_model, train_loader, val_loader=test_loader)
+    # 1. Pruning
+    # Create a fresh instance with loaded weights
+    pruning_model = YOLOv11n()
+    pruning_model.load_state_dict(original_state_dict)
+    pruned_model = demonstrate_pruning(pruning_model, val_loader=test_loader)
+    
+    # 2. Quantization (using loaded model)
+    quant_model = YOLOv11n()
+    quant_model.load_state_dict(original_state_dict)
+    quantized_model = demonstrate_quantization(quant_model, train_loader, val_loader=test_loader)
     
     # 3. Distillation (Standard)
-    distilled_model = demonstrate_distillation(train_loader, test_loader)
+    # Use loaded model as teacher
+    teacher_model = YOLOv11n()
+    teacher_model.load_state_dict(original_state_dict)
+    distilled_model = demonstrate_distillation(train_loader, test_loader, teacher_model=teacher_model)
     
     # 4. Cross-Platform Distillation (New)
-    demonstrate_cross_platform_distillation(train_loader)
+    # Use loaded model as teacher
+    cp_teacher_model = YOLOv11n()
+    cp_teacher_model.load_state_dict(original_state_dict)
+    demonstrate_cross_platform_distillation(train_loader, teacher_model=cp_teacher_model)
     
     # 5. Export all models
     print("\n" + "="*60)
