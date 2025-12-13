@@ -24,6 +24,8 @@ class SimpleCNN(nn.Module):
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
+        # Adapt to any input size by forcing the spatial dimensions to 5x5
+        x = F.adaptive_avg_pool2d(x, (5, 5))
         x = x.view(-1, 16 * 5 * 5)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))

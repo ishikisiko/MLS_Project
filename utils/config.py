@@ -2,7 +2,7 @@ import os
 
 # Project Paths
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_DATA_ROOT = os.path.join(PROJECT_ROOT, 'data', 'ua-detrac')
+DEFAULT_DATA_ROOT = os.path.join(PROJECT_ROOT, 'data', 'ua-detrac-10k')
 
 # Model Configuration
 MODEL_TYPE = 'detection'  # Options: 'classification', 'detection'
@@ -39,7 +39,7 @@ FOCAL_LOSS_ALPHA = 0.25
 FOCAL_LOSS_GAMMA = 2.0
 
 # Dataset Configuration
-USE_MOCK_DATA = True # Set to True to use simulated data for testing
+USE_MOCK_DATA = False # Set to True to use simulated data for testing
 MOCK_TRAIN_SIZE = 100  # Number of training samples in mock dataset
 MOCK_VAL_SIZE = 20     # Number of validation samples in mock dataset
 MOCK_TEST_SIZE = 20    # Number of test samples in mock dataset
