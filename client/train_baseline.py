@@ -175,7 +175,8 @@ def main():
         # Evaluate on validation set
         print("Evaluating on validation set...")
         # Use a lower confidence threshold for mAP calculation to capture the full PR curve
-        metrics = evaluate_detection(model, val_loader, args.device, num_classes=4, conf_threshold=0.001)
+        # Increased from 0.001 to 0.01 to speed up evaluation, NMS is now applied
+        metrics = evaluate_detection(model, val_loader, args.device, num_classes=4, conf_threshold=0.01)
         
         print(f"Validation mAP@0.5: {metrics['mAP@0.5']:.4f}")
         print(f"Validation mAP@0.5:0.95: {metrics['mAP@0.5:0.95']:.4f}")

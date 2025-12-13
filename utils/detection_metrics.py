@@ -5,6 +5,7 @@ Provides mAP computation at various IoU thresholds following COCO evaluation pro
 """
 
 import torch
+import torchvision
 import numpy as np
 from collections import defaultdict
 from utils import config
@@ -322,6 +323,18 @@ class DetectionEvaluator:
                 
                 # Convert to xyxy
                 boxes = xywh_to_xyxy(boxes)
+                
+                # Apply NMS
+                # Using 0.6 IoU threshold for NMS
+                keep = torchvision.ops.nms(boxes, scores, 0.6)
+                
+                # Limit to top 300 detections per image (standard COCO practice)
+                if len(keep) > 300:
+                    keep = keep[:300]
+                
+                boxes = boxes[keep]
+                scores = scores[keep]
+                labels = labels[keep]
                 
                 batch_preds.append({
                     'boxes': boxes.cpu().numpy(),
