@@ -10,6 +10,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from protos import service_pb2, service_pb2_grpc
 from utils import serialization, privacy, hardware, config
 
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+
 MAX_MESSAGE_LENGTH = config.MAX_MESSAGE_LENGTH 
 
 def run_client():
@@ -259,6 +265,9 @@ def run_detection_client(data_root=None, num_rounds=3):
             local_epochs = max(local_epochs, 1)
             print(f"Local Epochs: {local_epochs}")
             
+            # Start timing for monitoring
+            training_start_time = time.time()
+            
             # Train locally (FedProx with detection loss)
             print("Training locally with FedProx + Detection Loss...")
             total_losses = {'total_loss': 0, 'box_loss': 0, 'obj_loss': 0, 'cls_loss': 0}
@@ -277,6 +286,19 @@ def run_detection_client(data_root=None, num_rounds=3):
                     total_losses[k] += epoch_losses[k]
                 print(f"  Epoch {epoch+1}/{local_epochs}: Loss={epoch_losses['total_loss']:.4f} "
                       f"(box={epoch_losses['box_loss']:.4f}, obj={epoch_losses['obj_loss']:.4f}, cls={epoch_losses['cls_loss']:.4f})")
+            
+            # Calculate training duration
+            training_duration = time.time() - training_start_time
+            
+            # Collect resource usage for monitoring
+            memory_usage_mb = 0.0
+            cpu_percent = 0.0
+            if PSUTIL_AVAILABLE:
+                process = psutil.Process()
+                memory_usage_mb = process.memory_info().rss / (1024 * 1024)
+                cpu_percent = process.cpu_percent(interval=0.1)
+            
+            print(f"Training metrics: duration={training_duration:.2f}s, memory={memory_usage_mb:.1f}MB, cpu={cpu_percent:.1f}%")
             
             # Average losses
             for k in total_losses:
@@ -303,7 +325,10 @@ def run_detection_client(data_root=None, num_rounds=3):
                     config={
                         "round": str(round_num),
                         "loss": str(total_losses['total_loss']),
-                        "num_examples": str(len(train_loader) * optimal_batch_size)
+                        "num_examples": str(len(train_loader) * optimal_batch_size),
+                        "training_duration": str(training_duration),
+                        "memory_usage_mb": str(memory_usage_mb),
+                        "cpu_percent": str(cpu_percent)
                     },
                     device_info=device_info_proto
                 )

@@ -6,6 +6,7 @@ numpy
 torch
 torchvision
 psutil
+prometheus_client
 
 # Model deployment and optimization
 onnxruntime

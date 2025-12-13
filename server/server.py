@@ -17,6 +17,7 @@ from utils.models import SimpleCNN
 from utils.detection_models import YOLOv11n
 from utils import hardware
 from utils import config
+from utils import monitoring
 
 # Model type configuration
 # Set to 'detection' for object detection, 'classification' for image classification
@@ -57,6 +58,12 @@ class FederatedLearningServicer(service_pb2_grpc.FederatedLearningServiceService
         
         # Heterogeneous Device Manager
         self.hetero_manager = hardware.HeterogeneousManager()
+        
+        # Monitoring
+        self.metrics = monitoring.get_metrics()
+        self.metrics.set_round(self.round)
+        self.metrics.set_model_size(num_params * 4 / 1024 / 1024)
+        self.connected_client_ids = set()
         
         print("Server initialized.")
         print(f"Waiting for {MIN_FIT_CLIENTS} clients to start Round {self.round}")
@@ -136,6 +143,29 @@ class FederatedLearningServicer(service_pb2_grpc.FederatedLearningServiceService
                         metrics['loss'] = float(request.config['loss'])
                     except ValueError:
                         pass
+                
+                # Parse client resource metrics for monitoring
+                training_duration = 0.0
+                memory_usage_mb = 0.0
+                cpu_percent = 0.0
+                try:
+                    if 'training_duration' in request.config:
+                        training_duration = float(request.config['training_duration'])
+                    if 'memory_usage_mb' in request.config:
+                        memory_usage_mb = float(request.config['memory_usage_mb'])
+                    if 'cpu_percent' in request.config:
+                        cpu_percent = float(request.config['cpu_percent'])
+                except ValueError:
+                    pass
+                
+                # Update client metrics in monitoring
+                self.metrics.update_client_status(
+                    client_id=client_id,
+                    memory_mb=memory_usage_mb,
+                    cpu_percent=cpu_percent,
+                    training_duration=training_duration,
+                    current_round=self.round
+                )
                         
                 self.waiting_updates.append({
                     'parameters': request.parameters,
@@ -144,6 +174,11 @@ class FederatedLearningServicer(service_pb2_grpc.FederatedLearningServiceService
                 })
             else:
                 print(f"Client {client_id} connected (requesting initial model)")
+            
+            # Update monitoring
+            self.connected_client_ids.add(client_id)
+            self.metrics.set_connected_clients(len(self.connected_client_ids))
+            self.metrics.set_waiting_updates(len(self.waiting_updates))
 
             # Check if we can aggregate
             if len(self.waiting_updates) >= MIN_FIT_CLIENTS:
@@ -151,6 +186,8 @@ class FederatedLearningServicer(service_pb2_grpc.FederatedLearningServiceService
                 self._aggregate_models()
                 self.waiting_updates = [] # Clear updates for this round
                 self.round += 1
+                self.metrics.set_round(self.round)
+                self.metrics.increment_round()
                 self.ready_for_next_round = True
                 self.condition.notify_all() # Wake up all waiting threads
             
@@ -182,10 +219,16 @@ class FederatedLearningServicer(service_pb2_grpc.FederatedLearningServiceService
         """
         FedAvg: w_global = sum(n_k * w_k) / sum(n_k)
         """
+        import time
+        agg_start = time.time()
+        
         total_examples = sum(u['num_examples'] for u in self.waiting_updates)
         if total_examples == 0:
             print("No examples for aggregation!")
             return
+        
+        # Update metrics
+        self.metrics.add_examples(total_examples)
 
         print(f"Aggregating {len(self.waiting_updates)} updates with total {total_examples} examples.")
         
@@ -215,6 +258,12 @@ class FederatedLearningServicer(service_pb2_grpc.FederatedLearningServiceService
         if updates_with_loss:
             avg_loss = sum(u['metrics']['loss'] for u in updates_with_loss) / len(updates_with_loss)
             print(f"Round {self.round} Summary: Aggregated Loss = {avg_loss:.4f}")
+            self.metrics.set_loss(avg_loss)
+        
+        # Record aggregation time
+        agg_duration = time.time() - agg_start
+        self.metrics.record_aggregation_time(agg_duration)
+        print(f"Aggregation completed in {agg_duration:.3f}s")
             
     def Evaluate(self, request, context):
         return service_pb2.EvaluateResponse(loss=0.0, num_examples=0)
@@ -234,6 +283,9 @@ def serve():
     server.add_insecure_port(port)
     print(f"Starting Federated Learning Server on {port}...")
     print(f"Configuration: MIN_FIT_CLIENTS={MIN_FIT_CLIENTS}, TIMEOUT={ROUND_TIMEOUT}s")
+    
+    # Start Prometheus metrics endpoint
+    monitoring.init_metrics(port=8000)
     
     server.start()
     try:
