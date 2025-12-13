@@ -313,6 +313,38 @@ class ModelRegistry:
                 
         return best_name
 
+    def get_model_config_for_profile(self, profile: DeviceProfile) -> dict:
+        """
+        Get model configuration (hyperparameters) suitable for a device profile.
+        Specifically tuned for YOLOv11 scalable widths.
+        """
+        score = profile.compute_score
+        
+        # Mapping compute score to width_mult
+        # > 80: Full capacity (Server/High-end PC) -> 1.0
+        # 50-80: High Performance (Gaming Laptop/Mid-PC) -> 0.75
+        # 20-50: Mid Performance (Laptop/Edge AI) -> 0.50
+        # < 20: Low Power (Mobile/IoT) -> 0.25
+        
+        if score >= 80:
+            width_mult = 1.0
+            desc = "High Performance (Full)"
+        elif score >= 50:
+            width_mult = 0.75
+            desc = "Balanced (High)"
+        elif score >= 20:
+            width_mult = 0.50
+            desc = "Edge Optimized (Mid)"
+        else:
+            width_mult = 0.25
+            desc = "Ultra Lightweight (Low)"
+            
+        return {
+            'width_mult': width_mult,
+            'description': desc,
+            'target_device': profile.device_type
+        }
+
 class HeterogeneousManager:
     """
     Server-side manager for heterogeneous clients.

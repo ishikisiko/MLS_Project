@@ -213,6 +213,59 @@ def demonstrate_export(model, output_dir="exported_models", filename="model.onnx
     return onnx_path
 
 
+def demonstrate_cross_platform_distillation(train_loader):
+    """Demonstrate distillation adapted for different target devices."""
+    print("\n" + "="*60)
+    print("5. CROSS-PLATFORM KNOWLEDGE TRANSFER")
+    print("="*60)
+    
+    # 1. Define Simulated Device Profiles
+    from utils.hardware import DeviceProfile, ModelRegistry
+    
+    profiles = [
+        DeviceProfile("server_gpu", "cuda", 16000, 12000, 16, 90.0), # High-end
+        DeviceProfile("edge_mbp", "cpu", 8000, 4000, 8, 40.0),       # Mid-range
+        DeviceProfile("iot_cam", "edge_low", 1024, 256, 4, 10.0)     # Low-end
+    ]
+    
+    registry = ModelRegistry()
+    
+    # Teacher is constant
+    print("Initializing Teacher Model (YOLOv11n width=1.0)...")
+    teacher = YOLOv11n(width_mult=1.0)
+    
+    for profile in profiles:
+        print(f"\n{'-'*40}")
+        print(f"Targeting Device: {profile.device_id} (Score: {profile.compute_score})")
+        
+        # 2. Get optimal config
+        config_map = registry.get_model_config_for_profile(profile)
+        width = config_map['width_mult']
+        desc = config_map['description']
+        
+        print(f"Selected Architecture: YOLOv11n width={width} ({desc})")
+        
+        # 3. Instantiate Student
+        student = YOLOv11n(width_mult=width)
+        student_info = get_model_size(student)
+        print(f"Student Parameters: {student_info['num_parameters']:,}")
+        
+        # 4. Brief Distillation (Simulation)
+        distiller = DetectionDistillationTrainer(teacher, student, alpha=0.5)
+        optimizer = optim.Adam(student.parameters(), lr=0.001)
+        
+        print("Transferring knowledge...")
+        # Train 1 batch just to verify flow
+        for batch_data in train_loader:
+             if len(batch_data) == 4:
+                inputs, targets, _, _ = batch_data
+                loss = distiller.train_step(inputs, targets, optimizer)
+                print(f"  Batch Loss: {loss:.4f}")
+                break # Just 1 batch for demo
+        
+        print(f"  -> Model ready for {profile.device_id}")
+
+
 def run_full_pipeline():
     """Run the complete compression and deployment pipeline."""
     print("\n" + "="*60)
@@ -238,10 +291,13 @@ def run_full_pipeline():
     fresh_model = SimpleCNN()
     quantized_model = demonstrate_quantization(fresh_model, train_loader)
     
-    # 3. Distillation
+    # 3. Distillation (Standard)
     distilled_model = demonstrate_distillation(train_loader)
     
-    # 4. Export all models
+    # 4. Cross-Platform Distillation (New)
+    demonstrate_cross_platform_distillation(train_loader)
+    
+    # 5. Export all models
     print("\n" + "="*60)
     print("EXPORTING ALL MODELS")
     print("="*60)
@@ -258,6 +314,7 @@ def run_full_pipeline():
     print("  ✓ Unstructured Pruning (L1-norm based)")
     print("  ✓ Static Quantization (INT8)")
     print("  ✓ Knowledge Distillation (UA-DETRAC)")
+    print("  ✓ Cross-Platform Architecture Adaptation")
     print("\nExport formats:")
     print("  ✓ ONNX (with optimization)")
     print("  - TFLite (requires tensorflow, onnx-tf)")
@@ -266,3 +323,4 @@ def run_full_pipeline():
 
 if __name__ == "__main__":
     run_full_pipeline()
+

@@ -99,6 +99,28 @@ Student model: 700,000 parameters
 Compression ratio: 4.00x
 ```
 
+
+### 6. 跨平台架构自适应 (Cross-Platform Architecture Adaptation)
+在`compress_and_deploy.py`中演示了针对不同设备架构的自适应模型选择与蒸馏：
+
+*   **Server/High-End PC**: 使用完整 YOLOv11n (width=1.0)
+*   **Balanced/Laptop**: 使用平衡版 YOLOv11n (width=0.75)
+*   **Edge/IoT**: 使用轻量化 YOLOv11n (width=0.5/0.25)
+
+## 系统特性更新 (New Features)
+
+### 1. 实时监控系统 (Real-time Monitoring)
+集成了 Prometheus 和 Grafana 以进行系统级监控：
+*   **服务器指标**: 追踪客户端连接数、训练轮次、聚合时间等。
+*   **客户端指标**: 监控 CPU/内存使用率、训练时长、网络延迟。
+*   **Grafana 面板**: 可视化展示联邦学习系统的实时健康状态。
+
+### 2. 自适应系统行为 (Adaptive System Behavior)
+引入了网络和设备感知机制 (`utils/adaptive.py`)，根据实时条件动态调整：
+*   **参与决策**: 仅在设备资源（电量、内存）和网络质量满足阈值时参与训练。
+*   **动态超参**: 获取到较差的网络条件时，自动减小 Batch Size 和本地训练轮数 (Local Epochs) 以防止掉线。
+*   **加权聚合**: 服务器根据客户端的实时贡献能力动态调整其聚合权重。
+
 ## 项目结构 (Project Structure)
 * `server/`: 包含服务端逻辑 (`server.py`)。
 * `client/`: 包含客户端逻辑 (`client.py`) 和训练代码。
