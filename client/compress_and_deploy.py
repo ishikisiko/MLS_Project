@@ -56,7 +56,7 @@ def demonstrate_pruning(model, val_loader=None):
         print("  Evaluating original model...")
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model.to(device)
-        metrics = evaluate_detection(model, val_loader, device, num_classes=config.NUM_CLASSES)
+        metrics = evaluate_detection(model, val_loader, device, num_classes=config.NUM_CLASSES, conf_threshold=0.01)
         print(f"  Original mAP@0.5: {metrics['mAP@0.5']:.4f}")
 
     # Apply structured pruning
@@ -74,7 +74,7 @@ def demonstrate_pruning(model, val_loader=None):
     if val_loader:
         print("  Evaluating pruned model...")
         model.to(device)
-        metrics = evaluate_detection(model, val_loader, device, num_classes=config.NUM_CLASSES)
+        metrics = evaluate_detection(model, val_loader, device, num_classes=config.NUM_CLASSES, conf_threshold=0.01)
         print(f"  Pruned mAP@0.5: {metrics['mAP@0.5']:.4f}")
 
     # Make pruning permanent
@@ -99,7 +99,7 @@ def demonstrate_quantization(model, calibration_loader, val_loader=None):
         print("  Evaluating original model...")
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model.to(device)
-        metrics = evaluate_detection(model, val_loader, device, num_classes=config.NUM_CLASSES)
+        metrics = evaluate_detection(model, val_loader, device, num_classes=config.NUM_CLASSES, conf_threshold=0.01)
         print(f"  Original mAP@0.5: {metrics['mAP@0.5']:.4f}")
     
     # Static quantization
@@ -119,7 +119,7 @@ def demonstrate_quantization(model, calibration_loader, val_loader=None):
     if val_loader:
         print("  Evaluating quantized model...")
         # Quantized model runs on CPU usually
-        metrics = evaluate_detection(quantized_model, val_loader, device='cpu', num_classes=config.NUM_CLASSES)
+        metrics = evaluate_detection(quantized_model, val_loader, device='cpu', num_classes=config.NUM_CLASSES, conf_threshold=0.01)
         print(f"  Quantized mAP@0.5: {metrics['mAP@0.5']:.4f}")
     
     return quantized_model
@@ -196,7 +196,7 @@ def demonstrate_distillation(train_loader, val_loader=None, teacher_model=None):
                 # Assuming cuda if available
                 device = "cuda" if torch.cuda.is_available() else "cpu"
                 student.to(device)
-                metrics = evaluate_detection(student, val_loader, device, num_classes=4)
+                metrics = evaluate_detection(student, val_loader, device, num_classes=4, conf_threshold=0.01)
                 print(f"  Student mAP@0.5: {metrics['mAP@0.5']:.4f}")
                 print(f"  Student mAP@0.5:0.95: {metrics['mAP@0.5:0.95']:.4f}")
     
