@@ -28,12 +28,17 @@ class DeviceProfile:
     compute_score: float  # 0-100 score relative to a powerful baseline
     bandwidth_mbps: float = 10.0  # Default value, hard to measure accurately without network test
     power_budget_watts: float = 0.0 # 0.0 means unlimited/unknown
+    network_quality_score: float = 100.0  # Network quality (0-100)
+    latency_ms: float = 50.0              # Latency to server
+    is_network_stable: bool = True        # Is network jitter low
+    availability_score: float = 100.0     # Device availability (0-100)
     inference_latency_ms: Dict[str, float] = field(default_factory=dict)
     
     def __str__(self):
         return (f"DeviceProfile(id={self.device_id}, type={self.device_type}, "
                 f"mem={self.memory_available_mb:.1f}/{self.memory_total_mb:.1f}MB, "
-                f"compute={self.compute_score:.1f})")
+                f"compute={self.compute_score:.1f}, net={self.network_quality_score:.1f}, "
+                f"avail={self.availability_score:.1f})")
 
 class DeviceProfiler:
     """Tools to profile the current device's hardware capabilities."""
@@ -307,6 +312,38 @@ class ModelRegistry:
                 best_name = name
                 
         return best_name
+
+    def get_model_config_for_profile(self, profile: DeviceProfile) -> dict:
+        """
+        Get model configuration (hyperparameters) suitable for a device profile.
+        Specifically tuned for YOLOv11 scalable widths.
+        """
+        score = profile.compute_score
+        
+        # Mapping compute score to width_mult
+        # > 80: Full capacity (Server/High-end PC) -> 1.0
+        # 50-80: High Performance (Gaming Laptop/Mid-PC) -> 0.75
+        # 20-50: Mid Performance (Laptop/Edge AI) -> 0.50
+        # < 20: Low Power (Mobile/IoT) -> 0.25
+        
+        if score >= 80:
+            width_mult = 1.0
+            desc = "High Performance (Full)"
+        elif score >= 50:
+            width_mult = 0.75
+            desc = "Balanced (High)"
+        elif score >= 20:
+            width_mult = 0.50
+            desc = "Edge Optimized (Mid)"
+        else:
+            width_mult = 0.25
+            desc = "Ultra Lightweight (Low)"
+            
+        return {
+            'width_mult': width_mult,
+            'description': desc,
+            'target_device': profile.device_type
+        }
 
 class HeterogeneousManager:
     """

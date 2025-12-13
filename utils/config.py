@@ -44,3 +44,18 @@ MOCK_TRAIN_SIZE = 100  # Number of training samples in mock dataset
 MOCK_VAL_SIZE = 20     # Number of validation samples in mock dataset
 MOCK_TEST_SIZE = 20    # Number of test samples in mock dataset
 MOCK_NUM_OBJECTS_RANGE = (1, 5)  # Min and max objects per image in mock data
+
+# Adaptive System Configuration
+ADAPTIVE_ENABLED = True
+NETWORK_CHECK_INTERVAL = 5.0  # seconds
+MIN_NETWORK_SCORE = 30.0      # Minimum network quality score to participate (0-100)
+MIN_AVAILABILITY_SCORE = 20.0 # Minimum device availability score to participate (0-100)
+LOW_BANDWIDTH_THRESHOLD = 5.0 # Mbps
+HIGH_LATENCY_THRESHOLD = 500.0 # ms
+
+# Compression Levels & Adaptation
+COMPRESSION_LEVELS = {
+    'none': 1.0,    # No compression
+    'light': 0.5,   # e.g., Quantization
+    'heavy': 0.25   # e.g., Pruning + Quantization
+}
