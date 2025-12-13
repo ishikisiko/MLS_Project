@@ -28,12 +28,17 @@ class DeviceProfile:
     compute_score: float  # 0-100 score relative to a powerful baseline
     bandwidth_mbps: float = 10.0  # Default value, hard to measure accurately without network test
     power_budget_watts: float = 0.0 # 0.0 means unlimited/unknown
+    network_quality_score: float = 100.0  # Network quality (0-100)
+    latency_ms: float = 50.0              # Latency to server
+    is_network_stable: bool = True        # Is network jitter low
+    availability_score: float = 100.0     # Device availability (0-100)
     inference_latency_ms: Dict[str, float] = field(default_factory=dict)
     
     def __str__(self):
         return (f"DeviceProfile(id={self.device_id}, type={self.device_type}, "
                 f"mem={self.memory_available_mb:.1f}/{self.memory_total_mb:.1f}MB, "
-                f"compute={self.compute_score:.1f})")
+                f"compute={self.compute_score:.1f}, net={self.network_quality_score:.1f}, "
+                f"avail={self.availability_score:.1f})")
 
 class DeviceProfiler:
     """Tools to profile the current device's hardware capabilities."""

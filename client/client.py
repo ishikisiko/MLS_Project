@@ -8,7 +8,7 @@ import torch
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from protos import service_pb2, service_pb2_grpc
-from utils import serialization, privacy, hardware, config
+from utils import serialization, privacy, hardware, config, adaptive
 
 try:
     import psutil
@@ -217,6 +217,13 @@ def run_detection_client(data_root=None, num_rounds=3):
         
         # Initialize DP Engine
         dp_engine = privacy.DPEngine(max_norm=1.0, noise_multiplier=0.1)
+
+        # --- Adaptive System Initialization ---
+        network_monitor = adaptive.NetworkMonitor()
+        device_monitor = adaptive.DeviceAvailability()
+        adaptive_strategy = adaptive.AdaptiveStrategy(network_monitor, device_monitor)
+        print("Adaptive System initialized.")
+        # --------------------------------------
         
         # Import detection model and data loader
         from utils.detection_models import YOLOv11n
@@ -267,6 +274,46 @@ def run_detection_client(data_root=None, num_rounds=3):
             
             # Start timing for monitoring
             training_start_time = time.time()
+            
+            # --- Adaptive Check & Parameters ---
+            # 1. Check participation
+            if config.ADAPTIVE_ENABLED and not adaptive_strategy.should_participate():
+                print(f"Skipping Round {round_num} due to poor network or device availability.")
+                print(f"  Network Score: {network_monitor.get_network_quality_score():.1f}")
+                print(f"  Availability: {device_monitor.get_availability_score():.1f}")
+                # Notify server of skip? Or just silence. 
+                # For FL, silence usually means dropout. check timeout.
+                # To be polite, we could send an empty update or just wait.
+                # Here we just continue (dropout).
+                continue
+
+            # 2. Get Adaptive Parameters
+            if config.ADAPTIVE_ENABLED:
+                adaptive_params = adaptive_strategy.compute_adaptive_params(
+                    base_batch_size=optimal_batch_size,
+                    base_epochs=scheduler.compute_adaptive_epochs(profile, latency_budget_ms=5000.0)
+                )
+                
+                # Apply adaptive parameters
+                current_batch_size = adaptive_params.batch_size
+                local_epochs = adaptive_params.local_epochs
+                compression_level = adaptive_params.compression_level
+                
+                print(f"Adaptive Parameters: Batch={current_batch_size}, Epochs={local_epochs}, Compression={compression_level}")
+            else:
+                current_batch_size = optimal_batch_size
+                # local_epochs already set above
+                compression_level = 'none'
+
+            # Update DataLoader if batch size changed
+            if current_batch_size != train_loader.batch_size:
+                print(f"Adjusting batch size to {current_batch_size}...")
+                train_loader, _ = get_ua_detrac_loaders(
+                    data_root=data_root,
+                    batch_size=current_batch_size,
+                    num_workers=0
+                )
+            # -----------------------------------
             
             # Train locally (FedProx with detection loss)
             print("Training locally with FedProx + Detection Loss...")
@@ -328,7 +375,11 @@ def run_detection_client(data_root=None, num_rounds=3):
                         "num_examples": str(len(train_loader) * optimal_batch_size),
                         "training_duration": str(training_duration),
                         "memory_usage_mb": str(memory_usage_mb),
-                        "cpu_percent": str(cpu_percent)
+                        "cpu_percent": str(cpu_percent),
+                        # Adaptive Metrics
+                        "network_quality": str(network_monitor.get_network_quality_score()),
+                        "availability_score": str(device_monitor.get_availability_score()),
+                        "compression_level": compression_level
                     },
                     device_info=device_info_proto
                 )

@@ -115,6 +115,19 @@ class FederatedLearningServicer(service_pb2_grpc.FederatedLearningServiceService
                 'compute_score': info.compute_score
             }
             self.hetero_manager.register_client(client_id, profile_dict)
+            
+            # Update dynamic metrics from config if available (since proto might not have them)
+            if 'network_quality' in request.config or 'availability_score' in request.config:
+                try:
+                    if 'network_quality' in request.config:
+                        profile_dict['network_quality_score'] = float(request.config['network_quality'])
+                    if 'availability_score' in request.config:
+                        profile_dict['availability_score'] = float(request.config['availability_score'])
+                    # Re-register to update with dynamic slots
+                    self.hetero_manager.register_client(client_id, profile_dict)
+                except ValueError:
+                    pass
+                    
             print(f"Registered device profile for {client_id}: Score={info.compute_score}")
         # ---------------------------------------
         
@@ -166,6 +179,12 @@ class FederatedLearningServicer(service_pb2_grpc.FederatedLearningServiceService
                     training_duration=training_duration,
                     current_round=self.round
                 )
+                
+                # Log adaptive metrics
+                if 'network_quality' in request.config:
+                    print(f"  > Client {client_id[-10:]}: Net={request.config['network_quality'][:5]}, "
+                          f"Avail={request.config.get('availability_score', '?')[:5]}, "
+                          f"Comp={request.config.get('compression_level', 'none')}")
                         
                 self.waiting_updates.append({
                     'parameters': request.parameters,
