@@ -39,10 +39,10 @@ try:
 except ImportError:
     from training import evaluate_detection
 
-def demonstrate_pruning(model):
+def demonstrate_pruning(model, val_loader=None):
     """Demonstrate model pruning capabilities."""
     print("\n" + "="*60)
-    print("1. MODEL PRUNING DEMONSTRATION")
+    print("1. MODEL PRUNING DEMONSTRATION (Structured)")
     print("="*60)
     
     # Get original model info
@@ -51,16 +51,32 @@ def demonstrate_pruning(model):
     print(f"  - Parameters: {original_info['num_parameters']:,}")
     print(f"  - Size: {original_info['total_size_mb']:.4f} MB")
     
-    # Apply unstructured pruning
+    # Evaluate original mAP
+    if val_loader:
+        print("  Evaluating original model...")
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model.to(device)
+        metrics = evaluate_detection(model, val_loader, device, num_classes=config.NUM_CLASSES)
+        print(f"  Original mAP@0.5: {metrics['mAP@0.5']:.4f}")
+
+    # Apply structured pruning
     pruner = ModelPruner(model)
-    pruned_model = pruner.unstructured_prune(amount=0.5)
+    # Use structured pruning now
+    pruned_model = pruner.structured_prune(amount=0.5)
     
     # Check sparsity
     sparsity_info = pruner.get_sparsity()
-    print(f"\nAfter 50% unstructured pruning:")
+    print(f"\nAfter 50% structured pruning:")
     print(f"  - Sparsity: {sparsity_info['sparsity']*100:.2f}%")
     print(f"  - Zero weights: {sparsity_info['zero_params']:,} / {sparsity_info['total_params']:,}")
     
+    # Evaluate pruned mAP
+    if val_loader:
+        print("  Evaluating pruned model...")
+        model.to(device)
+        metrics = evaluate_detection(model, val_loader, device, num_classes=config.NUM_CLASSES)
+        print(f"  Pruned mAP@0.5: {metrics['mAP@0.5']:.4f}")
+
     # Make pruning permanent
     pruner.remove_pruning()
     print("  - Pruning masks removed (weights now permanent zeros)")
@@ -68,7 +84,7 @@ def demonstrate_pruning(model):
     return pruned_model
 
 
-def demonstrate_quantization(model, calibration_loader):
+def demonstrate_quantization(model, calibration_loader, val_loader=None):
     """Demonstrate model quantization capabilities."""
     print("\n" + "="*60)
     print("2. MODEL QUANTIZATION DEMONSTRATION")
@@ -77,6 +93,14 @@ def demonstrate_quantization(model, calibration_loader):
     # Get original size
     original_info = get_model_size(model)
     print(f"\nOriginal model size: {original_info['total_size_mb']:.4f} MB")
+
+    # Evaluate original mAP
+    if val_loader:
+        print("  Evaluating original model...")
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model.to(device)
+        metrics = evaluate_detection(model, val_loader, device, num_classes=config.NUM_CLASSES)
+        print(f"  Original mAP@0.5: {metrics['mAP@0.5']:.4f}")
     
     # Static quantization
     quantizer = ModelQuantizer(model)
@@ -90,6 +114,13 @@ def demonstrate_quantization(model, calibration_loader):
     if original_info['total_size_bytes'] > 0:
         reduction = (1 - quantized_info['total_size_bytes'] / original_info['total_size_bytes']) * 100
         print(f"  - Size reduction: {reduction:.2f}%")
+
+    # Evaluate quantized mAP
+    if val_loader:
+        print("  Evaluating quantized model...")
+        # Quantized model runs on CPU usually
+        metrics = evaluate_detection(quantized_model, val_loader, device='cpu', num_classes=config.NUM_CLASSES)
+        print(f"  Quantized mAP@0.5: {metrics['mAP@0.5']:.4f}")
     
     return quantized_model
 
@@ -294,18 +325,18 @@ def run_full_pipeline():
     print("Data loaded successfully.")
 
     # Create model
-    print("\nCreating SimpleCNN model...")
-    model = SimpleCNN()
+    print("\nCreating YOLOv11n model...")
+    model = YOLOv11n()
     model_info = get_model_info(model)
     print(f"Model created: {model_info['num_parameters']:,} parameters, "
           f"{model_info['size_mb']:.4f} MB")
     
     # 1. Pruning
-    pruned_model = demonstrate_pruning(model)
+    pruned_model = demonstrate_pruning(model, val_loader=test_loader)
     
     # 2. Quantization (using fresh model)
-    fresh_model = SimpleCNN()
-    quantized_model = demonstrate_quantization(fresh_model, train_loader)
+    fresh_model = YOLOv11n()
+    quantized_model = demonstrate_quantization(fresh_model, train_loader, val_loader=test_loader)
     
     # 3. Distillation (Standard)
     distilled_model = demonstrate_distillation(train_loader, test_loader)
@@ -318,8 +349,8 @@ def run_full_pipeline():
     print("EXPORTING ALL MODELS")
     print("="*60)
     
-    demonstrate_export(pruned_model, "exported_models", "pruned_model.onnx")
-    demonstrate_export(quantized_model, "exported_models", "quantized_model.onnx")
+    demonstrate_export(pruned_model, "exported_models", "pruned_model.onnx", input_shape=(1, 3, config.INPUT_SIZE, config.INPUT_SIZE))
+    demonstrate_export(quantized_model, "exported_models", "quantized_model.onnx", input_shape=(1, 3, config.INPUT_SIZE, config.INPUT_SIZE))
     demonstrate_export(distilled_model, "exported_models", "distilled_model.onnx", input_shape=(1, 3, config.INPUT_SIZE, config.INPUT_SIZE))
     
     # Summary
@@ -327,7 +358,7 @@ def run_full_pipeline():
     print("SUMMARY")
     print("="*60)
     print("\nCompression techniques demonstrated:")
-    print("  ✓ Unstructured Pruning (L1-norm based)")
+    print("  ✓ Structured Pruning (L-n norm based)")
     print("  ✓ Static Quantization (INT8)")
     print("  ✓ Knowledge Distillation (UA-DETRAC)")
     print("  ✓ Cross-Platform Architecture Adaptation")

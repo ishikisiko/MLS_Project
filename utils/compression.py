@@ -64,6 +64,23 @@ class ModelPruner:
                 prune.l1_unstructured(module, name='weight', amount=amount)
         return self.model
     
+    def structured_prune(self, amount=0.5, n=2, dim=0):
+        """
+        Apply structured pruning to the model.
+        Prunes entire channels/filters based on L-n norm.
+        """
+        for name, module in self.model.named_modules():
+            if isinstance(module, (nn.Conv2d, nn.Linear)):
+                # Skip the final detection head output layers to preserve output shape
+                if 'cv3' in name or 'head' in name:
+                     continue
+                     
+                try:
+                    prune.ln_structured(module, name='weight', amount=amount, n=n, dim=dim)
+                except Exception as e:
+                    print(f"Skipping pruning for {name}: {e}")
+        return self.model
+    
     def get_sparsity(self):
         total_params = 0
         zero_params = 0

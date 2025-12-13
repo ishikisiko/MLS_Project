@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+from torch.nn.quantized import FloatFunctional
 from utils import config
 
 # Class names for UA-DETRAC dataset
@@ -24,7 +25,7 @@ class ConvBlock(nn.Module):
             padding = kernel_size // 2
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, groups=groups, bias=False)
         self.bn = nn.BatchNorm2d(out_channels)
-        self.act = nn.SiLU(inplace=True)
+        self.act = nn.ReLU(inplace=True) # Changed from SiLU to ReLU for quantization support
     
     def forward(self, x):
         return self.act(self.bn(self.conv(x)))
@@ -39,9 +40,10 @@ class Bottleneck(nn.Module):
         self.cv1 = ConvBlock(in_channels, hidden, 1)
         self.cv2 = ConvBlock(hidden, out_channels, 3)
         self.add = shortcut and in_channels == out_channels
+        self.skip_add = FloatFunctional()
     
     def forward(self, x):
-        return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
+        return self.skip_add.add(x, self.cv2(self.cv1(x))) if self.add else self.cv2(self.cv1(x))
 
 
 class C2f(nn.Module):
@@ -55,11 +57,12 @@ class C2f(nn.Module):
         self.m = nn.ModuleList(
             Bottleneck(self.c, self.c, shortcut, expansion=1.0) for _ in range(n)
         )
+        self.ff = FloatFunctional()
     
     def forward(self, x):
         y = list(self.cv1(x).chunk(2, 1))
         y.extend(m(y[-1]) for m in self.m)
-        return self.cv2(torch.cat(y, 1))
+        return self.cv2(self.ff.cat(y, 1))
 
 
 class SPPF(nn.Module):
@@ -71,12 +74,13 @@ class SPPF(nn.Module):
         self.cv1 = ConvBlock(in_channels, hidden, 1)
         self.cv2 = ConvBlock(hidden * 4, out_channels, 1)
         self.m = nn.MaxPool2d(kernel_size=k, stride=1, padding=k // 2)
+        self.ff = FloatFunctional()
     
     def forward(self, x):
         x = self.cv1(x)
         y1 = self.m(x)
         y2 = self.m(y1)
-        return self.cv2(torch.cat([x, y1, y2, self.m(y2)], 1))
+        return self.cv2(self.ff.cat([x, y1, y2, self.m(y2)], 1))
 
 
 class DetectionHead(nn.Module):
