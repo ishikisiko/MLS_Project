@@ -36,7 +36,38 @@ def download_dataset(api_key, data_path):
     # We'll try to get the latest version.
     version = project.version(1) 
     dataset = version.download("yolov8", location=data_path)
+    
+    print(f"Dataset downloaded to: {dataset.location}")
     return dataset.location
+
+def validate_and_fix_dataset_path(path):
+    """
+    Validates if the dataset path contains 'train/images'.
+    If not, searches for it in immediate subdirectories.
+    """
+    # Check if path itself is valid
+    expected_train = os.path.join(path, 'train', 'images')
+    if os.path.exists(expected_train):
+        # We don't check for file count strictly here as some splits might be small, 
+        # but the directory must exist.
+        return path
+    
+    # Check subdirectories
+    if os.path.exists(path):
+        print(f"Dataset not found directly in {path}. Checking subdirectories...")
+        for item in os.listdir(path):
+            item_path = os.path.join(path, item)
+            if os.path.isdir(item_path):
+                candidate_train = os.path.join(item_path, 'train', 'images')
+                if os.path.exists(candidate_train):
+                    print(f"Found dataset in subdirectory: {item_path}")
+                    return item_path
+    
+    print(f"Warning: Could not find valid dataset structure in {path}")
+    # List contents to help debugging
+    if os.path.exists(path):
+        print(f"Contents of {path}: {os.listdir(path)}")
+    return path
 
 def main():
     parser = argparse.ArgumentParser(description="Train First Stage Baseline (YOLOv11n) on UA-DETRAC-10K-SAMPLE")
@@ -68,6 +99,9 @@ def main():
     else:
         print(f"Dataset directory {args.data_dir} already exists and contains data. Using existing data.")
         dataset_path = args.data_dir
+
+    # Validate and fix path if necessary
+    dataset_path = validate_and_fix_dataset_path(dataset_path)
 
     # 2. Setup DataLoaders
     # Define transforms

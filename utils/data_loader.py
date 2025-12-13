@@ -29,8 +29,17 @@ class UADetracDataset(Dataset):
         # Determine directories
         # Structure: root_dir/split/images and root_dir/split/labels
         if split == 'valid':
-            self.image_dir = os.path.join(root_dir, 'valid', 'images')
-            self.label_dir = os.path.join(root_dir, 'valid', 'labels')
+            # Handle both 'valid' and 'val' naming conventions
+            if os.path.exists(os.path.join(root_dir, 'valid')):
+                self.image_dir = os.path.join(root_dir, 'valid', 'images')
+                self.label_dir = os.path.join(root_dir, 'valid', 'labels')
+            elif os.path.exists(os.path.join(root_dir, 'val')):
+                self.image_dir = os.path.join(root_dir, 'val', 'images')
+                self.label_dir = os.path.join(root_dir, 'val', 'labels')
+            else:
+                # Default to 'valid' if neither found (will trigger warning later)
+                self.image_dir = os.path.join(root_dir, 'valid', 'images')
+                self.label_dir = os.path.join(root_dir, 'valid', 'labels')
         elif split == 'test':
             self.image_dir = os.path.join(root_dir, 'test', 'images')
             self.label_dir = os.path.join(root_dir, 'test', 'labels')
