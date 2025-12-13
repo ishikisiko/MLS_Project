@@ -74,7 +74,7 @@ def run_client():
         global_weights = [p.clone().detach() for p in model.parameters()]
 
         # Simulate FedAvg Rounds
-        for round_num in range(1, 4):
+        for round_num in range(1, 11):
             print(f"\n--- Round {round_num} ---")
             
             # --- Hardware-aware Optimization: Dynamic Batch Size ---
@@ -239,10 +239,13 @@ def run_detection_client(data_root=None, num_rounds=3):
         if data_root is None:
             data_root = config.DEFAULT_DATA_ROOT
             
+        # Optimize num_workers for 4090/high-end GPU
+        num_workers = min(os.cpu_count(), 8)
+        
         train_loader, val_loader = get_ua_detrac_loaders(
             data_root=data_root,
             batch_size=optimal_batch_size,
-            num_workers=0
+            num_workers=num_workers
         )
         
         print(f"Optimal Batch Size: {optimal_batch_size}")
@@ -336,7 +339,7 @@ if __name__ == '__main__':
                         help='Training mode: classification (old) or detection (new)')
     parser.add_argument('--data-root', type=str, default=None, 
                         help='Path to UA-DETRAC dataset root')
-    parser.add_argument('--rounds', type=int, default=3, help='Number of FL rounds')
+    parser.add_argument('--rounds', type=int, default=10, help='Number of FL rounds')
     args = parser.parse_args()
     
     if args.mode == 'detection':

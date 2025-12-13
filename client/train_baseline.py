@@ -4,6 +4,8 @@ import argparse
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
+import torchvision.transforms as transforms
+
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -13,9 +15,9 @@ from utils.detection_models import YOLOv11n
 from utils.data_loader import UADetracDataset
 from utils.detection_loss import DetectionLoss
 try:
-    from client.training import train_detection_epoch
+    from client.training import train_detection_epoch, evaluate_detection
 except ImportError:
-    from training import train_detection_epoch
+    from training import train_detection_epoch, evaluate_detection
 
 def download_dataset(api_key, data_path):
     """
@@ -39,7 +41,7 @@ def download_dataset(api_key, data_path):
 def main():
     parser = argparse.ArgumentParser(description="Train First Stage Baseline (YOLOv11n) on UA-DETRAC-10K-SAMPLE")
     parser.add_argument("--api-key", type=str, default="TwdK954qNo", help="Roboflow API Key")
-    parser.add_argument("--epochs", type=int, default=50, help="Number of epochs")
+    parser.add_argument("--epochs", type=int, default=10, help="Number of epochs")
     parser.add_argument("--batch-size", type=int, default=16, help="Batch size")
     parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Device to use")
@@ -57,16 +59,28 @@ def main():
         dataset_path = args.data_dir
 
     # 2. Setup DataLoaders
-    # Roboflow yolov8 format usually has 'train', 'valid', 'test' folders
-    train_dataset = UADetracDataset(root_dir=dataset_path, split='train')
-    val_dataset = UADetracDataset(root_dir=dataset_path, split='valid')
+    # Define transforms
+    transform = transforms.Compose([
+        transforms.Resize((config.INPUT_SIZE, config.INPUT_SIZE)), 
+        transforms.ToTensor(),
+    ])
 
+    # Roboflow yolov8 format usually has 'train', 'valid', 'test' folders
+    train_dataset = UADetracDataset(root_dir=dataset_path, split='train', transform=transform)
+    val_dataset = UADetracDataset(root_dir=dataset_path, split='valid', transform=transform)
+
+    # Use more workers and pin_memory for faster data loading
+    # Adjust num_workers based on CPU cores, but 8-16 is usually good for high-end GPUs
+    num_workers = min(os.cpu_count(), 8) 
+    
     train_loader = DataLoader(
         train_dataset, 
         batch_size=args.batch_size, 
         shuffle=True, 
         collate_fn=UADetracDataset.collate_fn,
-        num_workers=4
+        num_workers=num_workers,
+        pin_memory=True,
+        persistent_workers=(num_workers > 0)
     )
     
     val_loader = DataLoader(
@@ -74,7 +88,9 @@ def main():
         batch_size=args.batch_size, 
         shuffle=False, 
         collate_fn=UADetracDataset.collate_fn,
-        num_workers=4
+        num_workers=num_workers,
+        pin_memory=True,
+        persistent_workers=(num_workers > 0)
     )
 
     print(f"Train samples: {len(train_dataset)}, Val samples: {len(val_dataset)}")
@@ -88,7 +104,7 @@ def main():
     loss_fn = DetectionLoss(num_classes=4)
 
     # 5. Training Loop
-    best_loss = float('inf')
+    best_map = 0.0
     save_path = os.path.join(config.PROJECT_ROOT, "client", "baseline_model.pth")
 
     print("Starting training...")
@@ -111,33 +127,20 @@ def main():
               f"Obj: {avg_loss_dict['obj_loss']:.4f}, "
               f"Cls: {avg_loss_dict['cls_loss']:.4f})")
 
-        # Simple validation (loss-based)
-        model.eval()
-        val_loss = 0.0
-        with torch.no_grad():
-            for batch_data in val_loader:
-                if len(batch_data) == 4:
-                    images, targets, _, _ = batch_data
-                else:
-                    images, targets = batch_data
-                
-                images = images.to(args.device)
-                targets = targets.to(args.device)
-                
-                preds = model(images)
-                
-                # Build targets for loss calculation
-                obj_t, box_t, cls_t, mask = loss_fn.build_targets(preds, targets)
-                
-                # Calculate loss components (simplified for validation logging)
-                # Note: This requires manually calling loss parts or reusing loss_fn if it supports eval
-                # For now, we just track training loss or save every epoch
+        # Evaluate on validation set
+        print("Evaluating on validation set...")
+        metrics = evaluate_detection(model, val_loader, args.device, num_classes=4)
         
-        # Save best model based on training loss (or implement proper validation loss)
-        if avg_loss_dict['total_loss'] < best_loss:
-            best_loss = avg_loss_dict['total_loss']
+        print(f"Validation mAP@0.5: {metrics['mAP@0.5']:.4f}")
+        print(f"Validation mAP@0.5:0.95: {metrics['mAP@0.5:0.95']:.4f}")
+        
+        # Save best model based on mAP@0.5
+        current_map = metrics['mAP@0.5']
+        if current_map > best_map:
+            best_map = current_map
             torch.save(model.state_dict(), save_path)
-            print(f"Saved best model to {save_path}")
+            print(f"Saved best model to {save_path} (mAP@0.5: {best_map:.4f})")
+
 
     print("Training complete.")
 

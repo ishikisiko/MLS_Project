@@ -33,6 +33,12 @@ from utils.data_loader import get_data_loaders
 from utils import config
 
 
+from utils.detection_loss import DetectionLoss
+try:
+    from client.training import evaluate_detection
+except ImportError:
+    from training import evaluate_detection
+
 def demonstrate_pruning(model):
     """Demonstrate model pruning capabilities."""
     print("\n" + "="*60)
@@ -88,7 +94,7 @@ def demonstrate_quantization(model, calibration_loader):
     return quantized_model
 
 
-def demonstrate_distillation(train_loader):
+def demonstrate_distillation(train_loader, val_loader=None):
     """Demonstrate knowledge distillation capabilities."""
     print("\n" + "="*60)
     print("3. KNOWLEDGE DISTILLATION DEMONSTRATION")
@@ -122,9 +128,9 @@ def demonstrate_distillation(train_loader):
     
     print("\nTraining student with knowledge distillation using real dataset (UA-DETRAC)...")
     # Using a subset of batches for demonstration purposes
-    max_batches = 10 
+    max_batches = 50 
     
-    for epoch in range(1): # Reduced to 1 epoch for demo speed
+    for epoch in range(10): # Changed to 10 epochs
         total_loss = 0
         batch_count = 0
         
@@ -148,6 +154,16 @@ def demonstrate_distillation(train_loader):
         if batch_count > 0:
             avg_loss = total_loss / batch_count
             print(f"  Epoch {epoch+1}: Loss = {avg_loss:.4f} (over {batch_count} batches)")
+            
+            # Evaluate mAP if val_loader is provided
+            if val_loader is not None:
+                print("  Evaluating student model on validation set...")
+                # Assuming cuda if available
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                student.to(device)
+                metrics = evaluate_detection(student, val_loader, device, num_classes=4)
+                print(f"  Student mAP@0.5: {metrics['mAP@0.5']:.4f}")
+                print(f"  Student mAP@0.5:0.95: {metrics['mAP@0.5:0.95']:.4f}")
     
     print("  Distillation training complete!")
     
@@ -239,7 +255,7 @@ def run_full_pipeline():
     quantized_model = demonstrate_quantization(fresh_model, train_loader)
     
     # 3. Distillation
-    distilled_model = demonstrate_distillation(train_loader)
+    distilled_model = demonstrate_distillation(train_loader, test_loader)
     
     # 4. Export all models
     print("\n" + "="*60)

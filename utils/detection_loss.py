@@ -240,6 +240,23 @@ class DetectionLoss(nn.Module):
         positive_mask = obj_targets > 0
         return obj_targets, box_targets, cls_targets, positive_mask
     
+    def _make_grid(self, input_size, device):
+        """Generate grid coordinates for all feature levels."""
+        grid_coords = []
+        strides = []
+        
+        for stride in self.stride:
+            grid_size = input_size // stride
+            x = torch.arange(grid_size, device=device)
+            y = torch.arange(grid_size, device=device)
+            yy, xx = torch.meshgrid(y, x, indexing='ij')
+            coords = torch.stack([xx.flatten(), yy.flatten()], dim=-1)
+            
+            grid_coords.append(coords)
+            strides.append(torch.full((coords.shape[0],), stride, device=device))
+            
+        return torch.cat(grid_coords, dim=0), torch.cat(strides, dim=0)
+
     def forward(self, predictions, targets, input_size=config.INPUT_SIZE):
         """
         Calculate detection loss.
@@ -257,12 +274,23 @@ class DetectionLoss(nn.Module):
         batch_size = predictions.size(0)
         
         # Split predictions
-        pred_box = predictions[..., :4]  # (B, N, 4)
-        pred_obj = predictions[..., 4]   # (B, N)
+        pred_xy = predictions[..., :2]  # (B, N, 2)
+        pred_wh = predictions[..., 2:4] # (B, N, 2)
+        pred_obj = predictions[..., 4]  # (B, N)
         pred_cls = predictions[..., 5:]  # (B, N, C)
         
-        # Apply sigmoid to box predictions for normalization
-        pred_box = torch.sigmoid(pred_box)
+        # --- Grid-Relative Decoding ---
+        # Get grid coordinates and strides
+        grid_coords, strides = self._make_grid(input_size, device)
+        
+        # Decode XY: (sigmoid(tx) + cx) * stride / input_size
+        pred_xy = (torch.sigmoid(pred_xy) + grid_coords) * strides.unsqueeze(-1) / input_size
+        
+        # Decode WH: sigmoid(tw) (Absolute Normalized - unchanged)
+        pred_wh = torch.sigmoid(pred_wh)
+        
+        # Reassemble boxes
+        pred_box = torch.cat([pred_xy, pred_wh], dim=-1)
         
         # Build targets
         obj_targets, box_targets, cls_targets, positive_mask = self.build_targets(

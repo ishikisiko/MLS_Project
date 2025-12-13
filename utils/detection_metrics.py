@@ -236,20 +236,39 @@ class DetectionEvaluator:
         self.num_classes = num_classes
         self.iou_threshold = iou_threshold
         self.conf_threshold = conf_threshold
+        self.stride = [8, 16, 32]  # Stride for each feature level
         self.reset()
     
     def reset(self):
         """Reset collected predictions and targets."""
         self.predictions = []
         self.targets = []
+
+    def _make_grid(self, input_size, device):
+        """Generate grid coordinates for all feature levels."""
+        grid_coords = []
+        strides = []
+        
+        for stride in self.stride:
+            grid_size = input_size // stride
+            x = torch.arange(grid_size, device=device)
+            y = torch.arange(grid_size, device=device)
+            yy, xx = torch.meshgrid(y, x, indexing='ij')
+            coords = torch.stack([xx.flatten(), yy.flatten()], dim=-1)
+            
+            grid_coords.append(coords)
+            strides.append(torch.full((coords.shape[0],), stride, device=device))
+            
+        return torch.cat(grid_coords, dim=0), torch.cat(strides, dim=0)
     
-    def decode_predictions(self, outputs, conf_threshold=None):
+    def decode_predictions(self, outputs, conf_threshold=None, input_size=config.INPUT_SIZE):
         """
         Decode raw model outputs to boxes, scores, labels.
         
         Args:
             outputs: Model output (B, N, 4+1+C)
             conf_threshold: Confidence threshold for filtering
+            input_size: Input image size
         
         Returns:
             List of prediction dicts per image
@@ -259,14 +278,24 @@ class DetectionEvaluator:
         
         batch_preds = []
         batch_size = outputs.size(0)
+        device = outputs.device
+        
+        # Grid-Relative Decoding
+        grid_coords, strides = self._make_grid(input_size, device)
         
         for b in range(batch_size):
             pred = outputs[b]  # (N, 4+1+C)
             
-            # Apply sigmoid
-            boxes = torch.sigmoid(pred[:, :4])
+            # Split predictions
+            pred_xy = pred[:, :2]
+            pred_wh = pred[:, 2:4]
             obj_conf = torch.sigmoid(pred[:, 4])
             cls_conf = torch.sigmoid(pred[:, 5:])
+            
+            # Decode XY: (sigmoid(tx) + cx) * stride / input_size
+            # Note: We do this before filtering to ensure correct broadcasting, 
+            # but for efficiency we could filter first. 
+            # However, grid_coords matches N, so filtering first requires filtering grid too.
             
             # Overall confidence
             scores, labels = cls_conf.max(dim=1)
@@ -276,9 +305,20 @@ class DetectionEvaluator:
             mask = scores > conf_threshold
             
             if mask.any():
-                boxes = boxes[mask]
+                # Filter first to save computation
+                pred_xy = pred_xy[mask]
+                pred_wh = pred_wh[mask]
                 scores = scores[mask]
                 labels = labels[mask]
+                
+                curr_grid = grid_coords[mask]
+                curr_stride = strides[mask]
+                
+                # Decode
+                decoded_xy = (torch.sigmoid(pred_xy) + curr_grid) * curr_stride.unsqueeze(-1) / input_size
+                decoded_wh = torch.sigmoid(pred_wh)
+                
+                boxes = torch.cat([decoded_xy, decoded_wh], dim=-1)
                 
                 # Convert to xyxy
                 boxes = xywh_to_xyxy(boxes)
