@@ -35,11 +35,11 @@ from utils import config
 
 from utils.detection_loss import DetectionLoss
 try:
-    from client.training import evaluate_detection
+    from client.training import evaluate_detection, train_detection_epoch
 except ImportError:
-    from training import evaluate_detection
+    from training import evaluate_detection, train_detection_epoch
 
-def demonstrate_pruning(model, val_loader=None):
+def demonstrate_pruning(model, val_loader=None, train_loader=None):
     """Demonstrate model pruning capabilities."""
     print("\n" + "="*60)
     print("1. MODEL PRUNING DEMONSTRATION (Structured)")
@@ -52,9 +52,9 @@ def demonstrate_pruning(model, val_loader=None):
     print(f"  - Size: {original_info['total_size_mb']:.4f} MB")
     
     # Evaluate original mAP
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     if val_loader:
         print("  Evaluating original model...")
-        device = "cuda" if torch.cuda.is_available() else "cpu"
         model.to(device)
         metrics = evaluate_detection(model, val_loader, device, num_classes=config.NUM_CLASSES, conf_threshold=0.01)
         print(f"  Original mAP@0.5: {metrics['mAP@0.5']:.4f}")
@@ -70,6 +70,29 @@ def demonstrate_pruning(model, val_loader=None):
     print(f"  - Sparsity: {sparsity_info['sparsity']*100:.2f}%")
     print(f"  - Zero weights: {sparsity_info['zero_params']:,} / {sparsity_info['total_params']:,}")
     
+    # Fine-tuning (Retraining)
+    if train_loader:
+        print("\n  Fine-tuning pruned model to recover accuracy (Retraining)...")
+        # Create optimizer and loss for fine-tuning
+        # Use a smaller learning rate to preserve existing knowledge
+        optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.9, weight_decay=5e-4)
+        loss_fn = DetectionLoss(num_classes=config.NUM_CLASSES)
+        model.to(device)
+        
+        # Train for a few epochs
+        epochs = 5
+        print(f"  Training for {epochs} epochs...")
+        for epoch in range(epochs):
+            avg_loss_dict = train_detection_epoch(
+                model=model,
+                global_model_params=None,
+                train_loader=train_loader,
+                optimizer=optimizer,
+                device=device,
+                loss_fn=loss_fn
+            )
+            print(f"    Epoch {epoch+1}/{epochs}: Loss {avg_loss_dict['total_loss']:.4f}")
+
     # Evaluate pruned mAP
     if val_loader:
         print("  Evaluating pruned model...")
@@ -155,7 +178,8 @@ def demonstrate_distillation(train_loader, val_loader=None, teacher_model=None):
     distiller = DetectionDistillationTrainer(
         teacher_model=teacher,
         student_model=student,
-        alpha=0.5
+        alpha=0.5,
+        temperature=4.0
     )
     
     # Train for a few steps
@@ -163,7 +187,7 @@ def demonstrate_distillation(train_loader, val_loader=None, teacher_model=None):
     
     print("\nTraining student with knowledge distillation using real dataset (UA-DETRAC)...")
     # Using a subset of batches for demonstration purposes
-    max_batches = 50 
+    max_batches = 1000 
     
     for epoch in range(10): # Changed to 10 epochs
         total_loss = 0
@@ -367,7 +391,7 @@ def run_full_pipeline():
     # Create a fresh instance with loaded weights
     pruning_model = YOLOv11n()
     pruning_model.load_state_dict(original_state_dict)
-    pruned_model = demonstrate_pruning(pruning_model, val_loader=test_loader)
+    pruned_model = demonstrate_pruning(pruning_model, val_loader=test_loader, train_loader=train_loader)
     
     # 2. Quantization (using loaded model)
     quant_model = YOLOv11n()

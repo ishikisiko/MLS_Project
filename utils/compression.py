@@ -207,7 +207,7 @@ class DetectionDistillationTrainer:
     """
     Knowledge distillation trainer specifically for YOLO object detection models.
     """
-    def __init__(self, teacher_model, student_model, alpha=0.5):
+    def __init__(self, teacher_model, student_model, alpha=0.5, temperature=4.0):
         """
         Initialize the detection distillation trainer.
         
@@ -215,10 +215,12 @@ class DetectionDistillationTrainer:
             teacher_model: Pre-trained teacher detection model
             student_model: Student detection model
             alpha: Weight for soft distillation loss (1-alpha for hard label loss)
+            temperature: Temperature for softening probability distributions
         """
         self.teacher = teacher_model
         self.student = student_model
         self.alpha = alpha
+        self.temperature = temperature
         
         # Teacher should be in eval mode and not trainable
         self.teacher.eval()
@@ -240,28 +242,35 @@ class DetectionDistillationTrainer:
         s_box, s_obj, s_cls = student_pred[..., :4], student_pred[..., 4], student_pred[..., 5:]
         t_box, t_obj, t_cls = teacher_pred[..., :4], teacher_pred[..., 4], teacher_pred[..., 5:]
         
+        T = self.temperature
+        
         # 1. Objectness Loss
-        # Use teacher's sigmoid probability as soft target for student
-        t_obj_prob = torch.sigmoid(t_obj)
+        # Use teacher's sigmoid probability as soft target for student, smoothed by Temperature
+        t_obj_prob = torch.sigmoid(t_obj / T)
         # BCEWithLogits accepts logits as input and probabilities as target
         obj_loss = F.binary_cross_entropy_with_logits(s_obj, t_obj_prob)
         
         # 2. Classification Loss
-        # Distill class probabilities
-        t_cls_prob = torch.sigmoid(t_cls)
+        # Distill class probabilities with temperature
+        t_cls_prob = torch.sigmoid(t_cls / T)
         cls_loss = F.binary_cross_entropy_with_logits(s_cls, t_cls_prob)
         
         # 3. Box Loss
-        # Only distill box predictions where teacher is confident (obj > 0.5)
+        # Weighted by teacher confidence (original scale)
         # Using MSE on sigmoid-normalized box coordinates
-        mask = t_obj_prob > 0.5
+        s_box_sig = torch.sigmoid(s_box)
+        t_box_sig = torch.sigmoid(t_box)
         
-        if mask.sum() > 0:
-            s_box_sig = torch.sigmoid(s_box[mask])
-            t_box_sig = torch.sigmoid(t_box[mask])
-            box_loss = F.mse_loss(s_box_sig, t_box_sig)
-        else:
-            box_loss = torch.tensor(0.0, device=student_pred.device)
+        # Calculate MSE per element (B, N, 4)
+        box_mse = F.mse_loss(s_box_sig, t_box_sig, reduction='none')
+        
+        # Weight by teacher objectness probability (original scale)
+        # This acts as the "soft mask"
+        t_obj_prob_raw = torch.sigmoid(t_obj)
+        weights = t_obj_prob_raw.unsqueeze(-1)
+        
+        # Weighted Mean
+        box_loss = (box_mse * weights).mean()
             
         # Weighted sum (using same weights as config)
         total_loss = (
