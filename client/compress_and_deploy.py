@@ -62,7 +62,7 @@ def demonstrate_pruning(model):
     return pruned_model
 
 
-def demonstrate_quantization(model):
+def demonstrate_quantization(model, calibration_loader):
     """Demonstrate model quantization capabilities."""
     print("\n" + "="*60)
     print("2. MODEL QUANTIZATION DEMONSTRATION")
@@ -72,12 +72,12 @@ def demonstrate_quantization(model):
     original_info = get_model_size(model)
     print(f"\nOriginal model size: {original_info['total_size_mb']:.4f} MB")
     
-    # Dynamic quantization
+    # Static quantization
     quantizer = ModelQuantizer(model)
-    quantized_model = quantizer.dynamic_quantize()
+    quantized_model = quantizer.static_quantize(calibration_loader)
     
     quantized_info = get_model_size(quantized_model)
-    print(f"\nAfter dynamic INT8 quantization:")
+    print(f"\nAfter static INT8 quantization:")
     print(f"  - Size: {quantized_info['total_size_mb']:.4f} MB")
     
     # Compare
@@ -236,7 +236,7 @@ def run_full_pipeline():
     
     # 2. Quantization (using fresh model)
     fresh_model = SimpleCNN()
-    quantized_model = demonstrate_quantization(fresh_model)
+    quantized_model = demonstrate_quantization(fresh_model, train_loader)
     
     # 3. Distillation
     distilled_model = demonstrate_distillation(train_loader)
@@ -256,7 +256,7 @@ def run_full_pipeline():
     print("="*60)
     print("\nCompression techniques demonstrated:")
     print("  ✓ Unstructured Pruning (L1-norm based)")
-    print("  ✓ Dynamic Quantization (INT8)")
+    print("  ✓ Static Quantization (INT8)")
     print("  ✓ Knowledge Distillation (UA-DETRAC)")
     print("\nExport formats:")
     print("  ✓ ONNX (with optimization)")

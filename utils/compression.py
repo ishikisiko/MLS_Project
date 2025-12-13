@@ -17,23 +17,26 @@ def quantize_model(model, dtype=torch.qint8):
     )
     return quantized_model
 
+import io
+
 def get_model_size(model):
     """
     Calculate the size of a PyTorch model in bytes and megabytes.
+    Uses serialization for accurate measurement of quantized models.
     """
-    param_size = 0
-    buffer_size = 0
-    for param in model.parameters():
-        param_size += param.nelement() * param.element_size()
-    for buffer in model.buffers():
-        buffer_size += buffer.nelement() * buffer.element_size()
-    total_size = param_size + buffer_size
+    buffer = io.BytesIO()
+    torch.save(model.state_dict(), buffer)
+    total_size = buffer.tell()
+    
+    # Also count parameters for reference (might be 0 for quantized)
+    num_params = sum(p.numel() for p in model.parameters())
+    
     return {
-        'param_size_bytes': param_size,
-        'buffer_size_bytes': buffer_size,
+        'param_size_bytes': total_size, # Approximate
+        'buffer_size_bytes': 0,
         'total_size_bytes': total_size,
         'total_size_mb': total_size / (1024 * 1024),
-        'num_parameters': sum(p.numel() for p in model.parameters())
+        'num_parameters': num_params
     }
 
 def compare_models(original_model, compressed_model):
@@ -99,6 +102,52 @@ class ModelQuantizer:
         return quantize_dynamic(
             self.model, {torch.nn.Linear, torch.nn.LSTM, torch.nn.GRU, torch.nn.RNN}, dtype=dtype
         )
+
+    def static_quantize(self, calibration_loader, num_calibration_batches=10):
+        """
+        Apply static quantization to the model (Post Training Static Quantization).
+        Suitable for CNNs (Conv2d layers).
+        """
+        self.model.eval()
+        # Quantization is typically done on CPU
+        self.model.to('cpu')
+        
+        # Wrap model to ensure input is quantized and output is dequantized
+        # This is necessary for models that don't have QuantStub/DeQuantStub
+        self.model = torch.quantization.QuantWrapper(self.model)
+        
+        # 1. Set qconfig
+        # 'fbgemm' for x86, 'qnnpack' for ARM
+        backend = 'fbgemm' if 'fbgemm' in torch.backends.quantized.supported_engines else 'qnnpack'
+        self.model.qconfig = torch.quantization.get_default_qconfig(backend)
+        
+        # 2. Prepare (inserts observers)
+        torch.quantization.prepare(self.model, inplace=True)
+        
+        # 3. Calibrate
+        print(f"Calibrating model ({backend}) with {num_calibration_batches} batches...")
+        with torch.no_grad():
+            for i, batch_data in enumerate(calibration_loader):
+                if i >= num_calibration_batches:
+                    break
+                
+                # Handle different data loader formats
+                if isinstance(batch_data, (tuple, list)):
+                    if len(batch_data) >= 1:
+                        inputs = batch_data[0]
+                    else:
+                        continue
+                else:
+                    inputs = batch_data
+                
+                # Ensure inputs are on CPU
+                inputs = inputs.to('cpu')
+                self.model(inputs)
+        
+        # 4. Convert (replaces layers with quantized versions)
+        torch.quantization.convert(self.model, inplace=True)
+        
+        return self.model
 
 class DistillationTrainer:
     """
